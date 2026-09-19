@@ -1,0 +1,25 @@
+{
+  "name": "zombie-waves",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Juego multijugador online de disparos con oleadas de zombies (top-down) para navegador",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "build": "npm run build -w shared && npm run build -w server && npm run build -w client",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
