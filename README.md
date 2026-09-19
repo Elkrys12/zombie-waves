@@ -47,6 +47,17 @@ npm run dev          # levanta servidor (puerto 2567) y cliente (puerto 5173)
 
 Abre <http://localhost:5173> en varias pestañas para probar el multijugador.
 
+## Controles
+
+| Acción | Control |
+|---|---|
+| Moverse | WASD o flechas |
+| Apuntar / disparar | Ratón / clic izquierdo |
+| Abrir tienda | B |
+| Comprar | 1-4 armas · 5-9 mejoras (con la tienda abierta) |
+
+Entre oleada y oleada hay 15 s para comprar. Si mueres, reapareces al empezar la siguiente oleada; si mueren todos, la partida se reinicia.
+
 Scripts útiles:
 
 | Comando | Descripción |
@@ -61,11 +72,11 @@ Scripts útiles:
 
 - [x] Estructura del monorepo y stack
 - [x] Conexión cliente-servidor y movimiento sincronizado
-- [ ] Disparos y balas
-- [ ] Zombies con IA básica y oleadas
-- [ ] Sistema de vida, muerte y reaparición
-- [ ] Dinero y tienda de mejoras (armas, chaleco, velocidad, daño...)
+- [x] Disparos y balas
+- [x] Zombies con IA básica y oleadas (walker, runner, tank)
+- [x] Sistema de vida, muerte y reaparición
+- [x] Dinero y tienda de mejoras (armas, chaleco, velocidad, daño, cadencia, vida)
 - [ ] Lobby: crear sala y unirse por código
 - [ ] Sprites, animaciones y sonido
-- [ ] HUD (vida, oleada, dinero, arma)
+- [x] HUD (vida, oleada, dinero, arma, marcador)
 - [ ] Despliegue (cliente estático + servidor Node)

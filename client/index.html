@@ -5,11 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Zombie Waves</title>
     <style>
-      html, body { margin: 0; padding: 0; background: #0b0b0f; overflow: hidden; }
+      html, body { margin: 0; padding: 0; background: #0b0b0f; overflow: hidden; font-family: system-ui, sans-serif; }
       #game { width: 100vw; height: 100vh; }
+      #menu {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        background: radial-gradient(circle at center, #1c1c26 0%, #0b0b0f 70%);
+        color: #eee; z-index: 10;
+      }
+      #menu.hidden { display: none; }
+      #menu form { display: flex; flex-direction: column; gap: 14px; width: 300px; text-align: center; }
+      #menu h1 { margin: 0 0 8px; font-size: 42px; letter-spacing: 2px; color: #7ed957; }
+      #menu p { margin: 0; color: #999; font-size: 14px; line-height: 1.5; }
+      #menu input {
+        padding: 12px; font-size: 16px; border-radius: 6px; border: 1px solid #444;
+        background: #16161d; color: #eee; text-align: center;
+      }
+      #menu button {
+        padding: 12px; font-size: 16px; border-radius: 6px; border: none; cursor: pointer;
+        background: #7ed957; color: #0b0b0f; font-weight: bold;
+      }
+      #menu button:hover { background: #95e874; }
+      #menu .error { color: #ff6b6b; min-height: 18px; font-size: 13px; }
     </style>
   </head>
   <body>
+    <div id="menu">
+      <form id="menu-form">
+        <h1>ZOMBIE WAVES</h1>
+        <p>Muévete con WASD o flechas · Apunta y dispara con el ratón<br />Tienda con la tecla <b>B</b> · Compra con los números</p>
+        <input id="name" type="text" maxlength="12" placeholder="Tu nombre" autocomplete="off" />
+        <button type="submit">Jugar</button>
+        <div class="error" id="menu-error"></div>
+      </form>
+    </div>
     <div id="game"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
