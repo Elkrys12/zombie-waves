@@ -2,6 +2,16 @@
 
 Juego multijugador online de disparos con oleadas de zombies, jugable desde el navegador. Vista cenital (top-down), movimiento en 4 direcciones y apuntado con el ratón. Sobrevive junto a tus amigos en un pueblo de 3200×3200 px con barrio, plaza, parque, aparcamiento, almacén y campo; los edificios, muros, coches y árboles bloquean el paso (y los muros y edificios, también las balas). Gana dinero por cada zombie y compra mejoras entre oleadas: armas, chaleco, velocidad, daño y más. De noche solo ves lo que ilumina tu linterna.
 
+## Capturas
+
+| Plaza de día | Barrio |
+|---|---|
+| ![](docs/screenshots/plaza-dia.png) | ![](docs/screenshots/barrio-dia.png) |
+
+| Aparcamiento de noche | Plaza de noche |
+|---|---|
+| ![](docs/screenshots/aparcamiento-noche.png) | ![](docs/screenshots/plaza-noche.png) |
+
 ## Stack
 
 | Capa | Tecnología | Rol |
@@ -113,6 +123,10 @@ Cada push a `main` ejecuta [deploy-client.yml](.github/workflows/deploy-client.y
 Para que apunte a tu servidor, define la variable de repositorio **`VITE_SERVER_URL`** (Settings > Secrets and variables > Actions > Variables) con la URL del servidor usando `wss://`, por ejemplo `wss://zombie-waves-server.onrender.com`, y vuelve a lanzar el workflow.
 
 Mientras tanto puedes probar cualquier servidor sin reconstruir añadiendo `?server=wss://tu-servidor` a la URL del cliente.
+
+## Créditos
+
+Sprites de personajes, zombie, tiles, coches y props: [Kenney](https://kenney.nl) (packs *Top-Down Shooter* y *Racing Pack*, licencia CC0). Ver [client/public/assets/kenney/LICENSE.txt](client/public/assets/kenney/LICENSE.txt).
 
 ## Roadmap
 

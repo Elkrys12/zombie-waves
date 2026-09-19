@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { BootScene } from "./scenes/BootScene";
 import { GameScene } from "./scenes/GameScene";
 import { HudScene } from "./scenes/HudScene";
 import { NetworkManager } from "./net/NetworkManager";
@@ -85,7 +86,7 @@ function startGame(net: NetworkManager) {
     },
     // En modo prueba (?auto=1) conservamos el buffer para que las capturas headless no salgan negras
     render: { preserveDrawingBuffer: !!params.get("auto") },
-    scene: [GameScene, HudScene],
+    scene: [BootScene, GameScene, HudScene],
     callbacks: {
       // La conexión ya está abierta: la dejamos en el registry antes de que arranquen las escenas
       preBoot: (g) => {

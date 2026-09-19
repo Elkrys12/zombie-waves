@@ -1,0 +1,3 @@
+Assets de Kenney (https://kenney.nl) — licencia Creative Commons Zero (CC0).
+Packs usados: "Top-Down Shooter" (personajes, zombie, tiles) y "Racing Pack" (coches, árboles, conos, farola, barreras).
+Puedes usarlos libremente; la atribución no es obligatoria pero es bienvenida.

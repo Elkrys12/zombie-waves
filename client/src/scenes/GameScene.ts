@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { NetworkManager } from "../net/NetworkManager";
 import { SoundManager } from "../audio/SoundManager";
-import { generateTextures, PLAYER_COLORS } from "../gfx/textures";
+import { PLAYER_SKINS, WEAPON_POSE } from "./BootScene";
 import { MapRenderer } from "../gfx/MapRenderer";
 import { Lighting } from "../gfx/Lighting";
 import {
@@ -26,6 +26,7 @@ interface PlayerView {
 
 interface ZombieView {
   sprite: Phaser.GameObjects.Image;
+  shadow: Phaser.GameObjects.Ellipse;
   hpBg: Phaser.GameObjects.Rectangle;
   hpBar: Phaser.GameObjects.Rectangle;
   facing: number;
@@ -49,8 +50,10 @@ export class GameScene extends Phaser.Scene {
   private blood!: Phaser.GameObjects.Particles.ParticleEmitter;
   private damageFlash!: Phaser.GameObjects.Rectangle;
   private lighting!: Lighting;
+  private lamps: { x: number; y: number }[] = [];
   private keys!: Record<"W" | "A" | "S" | "D" | "UP" | "DOWN" | "LEFT" | "RIGHT", Phaser.Input.Keyboard.Key>;
   private colorIndex = 0;
+  private synced = false; // true tras el primer frame: los zombies ya existentes no "nacen" animados
 
   constructor() {
     super("game");
@@ -63,11 +66,9 @@ export class GameScene extends Phaser.Scene {
     this.registry.set("sfx", this.sfx);
     this.input.on("pointerdown", () => this.sfx.resume());
 
-    generateTextures(this);
-
     // Mapa e iluminación
     this.cameras.main.setBounds(0, 0, MAP_WIDTH, MAP_HEIGHT);
-    new MapRenderer(this).draw();
+    this.lamps = new MapRenderer(this).draw();
     this.lighting = new Lighting(this);
 
     // Partículas de sangre (se disparan con explode)
@@ -99,9 +100,12 @@ export class GameScene extends Phaser.Scene {
 
     $(state).players.onAdd((player: PlayerState, id: string) => {
       const isMe = id === this.net.sessionId;
-      const body = this.add.image(0, 0, `player_${this.colorIndex++ % PLAYER_COLORS.length}`);
-      const gun = this.add.image(PLAYER_RADIUS - 2, 7, `gun_${player.weapon}`).setOrigin(0, 0.5);
-      const root = this.add.container(player.x, player.y, [gun, body]).setDepth(10);
+      const skin = PLAYER_SKINS[this.colorIndex++ % PLAYER_SKINS.length];
+      const body = this.add.image(0, 0, `${skin}_${WEAPON_POSE[player.weapon] ?? "gun"}`).setOrigin(0.4, 0.5);
+      const gun = body; // el sprite de Kenney ya incluye el arma
+      const shadow = this.add.ellipse(0, 4, 40, 34, 0x000000, 0.35);
+      const root = this.add.container(player.x, player.y, [shadow, body]).setDepth(10);
+      root.setData("skin", skin);
       const name = this.add.text(0, 0, player.name, { fontSize: "12px", color: "#fff", fontFamily: "system-ui", stroke: "#000", strokeThickness: 3 })
         .setOrigin(0.5, 1).setDepth(12);
       const hpBg = this.add.rectangle(0, 0, 40, 5, 0x000000, 0.6).setDepth(12);
@@ -109,7 +113,10 @@ export class GameScene extends Phaser.Scene {
       this.players.set(id, { root, body, gun, name, hpBg, hpBar, lastX: player.x, lastY: player.y, moving: false });
 
       if (isMe) {
-        this.cameras.main.startFollow(root, true, 0.12, 0.12);
+        // ?cam=x,y (pruebas): cámara fija en un punto del mapa en vez de seguir al jugador
+        const cam = new URLSearchParams(location.search).get("cam")?.split(",").map(Number);
+        if (cam && cam.length === 2 && cam.every(Number.isFinite)) this.cameras.main.centerOn(cam[0], cam[1]);
+        else this.cameras.main.startFollow(root, true, 0.12, 0.12);
         $(player).listen("hp", (hp: number, prev: number) => {
           if (prev !== undefined && hp < prev) this.onLocalDamage();
         });
@@ -128,15 +135,22 @@ export class GameScene extends Phaser.Scene {
 
     $(state).zombies.onAdd((zombie: ZombieState, id: string) => {
       const config = ZOMBIES[zombie.type];
-      const sprite = this.add.image(zombie.x, zombie.y, `zombie_${zombie.type}`).setDepth(8);
+      const sprite = this.add.image(zombie.x, zombie.y, `zombie_${zombie.type}`).setOrigin(0.4, 0.5).setDepth(8);
+      const zScale = (config.radius * 2.4) / 43; // el sprite base mide 43 px de alto
+      sprite.setData("scale", zScale);
+      const shadow = this.add.ellipse(zombie.x, zombie.y + 3, config.radius * 2.4, config.radius * 2.1, 0x000000, 0.35).setDepth(7);
       const w = config.radius * 2;
       const hpBg = this.add.rectangle(0, 0, w, 4, 0x000000, 0.6).setDepth(9).setVisible(false);
       const hpBar = this.add.rectangle(0, 0, w, 4, 0xff5252).setOrigin(0, 0.5).setDepth(9).setVisible(false);
-      this.zombies.set(id, { sprite, hpBg, hpBar, facing: 0, lastX: zombie.x, lastY: zombie.y, moving: false, wobbleSeed: Math.random() * 10 });
+      this.zombies.set(id, { sprite, shadow, hpBg, hpBar, facing: 0, lastX: zombie.x, lastY: zombie.y, moving: false, wobbleSeed: Math.random() * 10 });
 
-      // Aparece creciendo desde el suelo
-      sprite.setScale(0.2);
-      this.tweens.add({ targets: sprite, scale: 1, duration: 250, ease: "Back.Out" });
+      // Aparece creciendo desde el suelo (solo los que aparecen durante la partida)
+      if (this.synced) {
+        sprite.setScale(zScale * 0.2);
+        this.tweens.add({ targets: sprite, scale: zScale, duration: 250, ease: "Back.Out" });
+      } else {
+        sprite.setScale(zScale);
+      }
 
       $(zombie).listen("hp", (hp: number, prev: number) => {
         if (prev === undefined || hp >= prev) return;
@@ -151,7 +165,7 @@ export class GameScene extends Phaser.Scene {
       const view = this.zombies.get(id);
       if (!view) return;
       this.onZombieDeath(view.sprite.x, view.sprite.y);
-      [view.sprite, view.hpBg, view.hpBar].forEach((o) => o.destroy());
+      [view.sprite, view.shadow, view.hpBg, view.hpBar].forEach((o) => o.destroy());
       this.zombies.delete(id);
     });
 
@@ -198,7 +212,7 @@ export class GameScene extends Phaser.Scene {
     this.blood.explode(18, x, y);
     this.sfx.zombieDeath();
 
-    const decal = this.add.image(x, y, "blood").setRotation(Math.random() * Math.PI * 2).setDepth(2).setAlpha(0.9);
+    const decal = this.add.image(x, y, "blood_decal").setRotation(Math.random() * Math.PI * 2).setScale(0.8 + Math.random() * 0.5).setDepth(2).setAlpha(0.9);
     this.decals.push(decal);
     if (this.decals.length > MAX_DECALS) this.decals.shift()?.destroy();
     this.tweens.add({ targets: decal, alpha: 0, delay: 8000, duration: 3000, onComplete: () => decal.destroy() });
@@ -214,6 +228,7 @@ export class GameScene extends Phaser.Scene {
   // ------------------------------------------------------------------ bucle
 
   update(time: number, delta: number) {
+    this.synced = true;
     this.sendInput(time);
     this.syncPlayers(time);
     this.syncZombies(time);
@@ -230,6 +245,8 @@ export class GameScene extends Phaser.Scene {
       const radius = !player.alive ? 220 : id === this.net.sessionId ? 420 : 300;
       lights.push({ x: view.root.x, y: view.root.y, radius });
     });
+    // Farolas del pueblo
+    for (const l of this.lamps) lights.push({ x: l.x, y: l.y, radius: 230 });
     // Las balas iluminan un poco a su paso
     this.bullets.forEach((b) => lights.push({ x: b.x, y: b.y, radius: 60 }));
     // De día en la sala de espera; anochece cuando empieza la acción
@@ -270,9 +287,8 @@ export class GameScene extends Phaser.Scene {
       // Balanceo al andar
       const bob = view.moving && player.alive ? 1 + Math.sin(time / 60) * 0.05 : 1;
       view.body.setScale(bob, 2 - bob);
-      view.gun.setVisible(player.alive);
-      const gunKey = `gun_${player.weapon}`;
-      if (view.gun.texture.key !== gunKey) view.gun.setTexture(gunKey);
+      const bodyKey = `${view.root.getData("skin")}_${player.alive ? WEAPON_POSE[player.weapon] ?? "gun" : "stand"}`;
+      if (view.body.texture.key !== bodyKey) view.body.setTexture(bodyKey);
 
       view.name.setPosition(view.root.x, view.root.y - PLAYER_RADIUS - 12);
       view.hpBg.setPosition(view.root.x, view.root.y - PLAYER_RADIUS - 6);
@@ -296,6 +312,7 @@ export class GameScene extends Phaser.Scene {
       const sprite = view.sprite;
       sprite.x = Phaser.Math.Linear(sprite.x, zombie.x, LERP);
       sprite.y = Phaser.Math.Linear(sprite.y, zombie.y, LERP);
+      view.shadow.setPosition(sprite.x, sprite.y + 3);
 
       // Giro suave hacia la dirección de avance + tambaleo al caminar
       const wobble = view.moving ? Math.sin(time / 90 + view.wobbleSeed) * 0.15 : 0;
