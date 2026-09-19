@@ -13,30 +13,44 @@
         color: #eee; z-index: 10;
       }
       #menu.hidden { display: none; }
-      #menu form { display: flex; flex-direction: column; gap: 14px; width: 300px; text-align: center; }
-      #menu h1 { margin: 0 0 8px; font-size: 42px; letter-spacing: 2px; color: #7ed957; }
-      #menu p { margin: 0; color: #999; font-size: 14px; line-height: 1.5; }
+      #menu .panel { display: flex; flex-direction: column; gap: 12px; width: 320px; text-align: center; }
+      #menu h1 { margin: 0 0 4px; font-size: 42px; letter-spacing: 2px; color: #7ed957; }
+      #menu p { margin: 0; color: #999; font-size: 13px; line-height: 1.5; }
       #menu input {
         padding: 12px; font-size: 16px; border-radius: 6px; border: 1px solid #444;
-        background: #16161d; color: #eee; text-align: center;
+        background: #16161d; color: #eee; text-align: center; width: 100%; box-sizing: border-box;
       }
+      #menu input.code { text-transform: uppercase; letter-spacing: 4px; font-family: monospace; }
       #menu button {
-        padding: 12px; font-size: 16px; border-radius: 6px; border: none; cursor: pointer;
-        background: #7ed957; color: #0b0b0f; font-weight: bold;
+        padding: 12px; font-size: 15px; border-radius: 6px; border: none; cursor: pointer;
+        background: #7ed957; color: #0b0b0f; font-weight: bold; width: 100%;
       }
-      #menu button:hover { background: #95e874; }
+      #menu button.secondary { background: #2b2b38; color: #eee; }
+      #menu button:hover { filter: brightness(1.15); }
+      #menu button:disabled { opacity: 0.5; cursor: default; }
+      #menu .row { display: flex; gap: 8px; }
+      #menu .divider { color: #555; font-size: 12px; margin: 6px 0 0; }
       #menu .error { color: #ff6b6b; min-height: 18px; font-size: 13px; }
     </style>
   </head>
   <body>
     <div id="menu">
-      <form id="menu-form">
+      <div class="panel">
         <h1>ZOMBIE WAVES</h1>
-        <p>Muévete con WASD o flechas · Apunta y dispara con el ratón<br />Tienda con la tecla <b>B</b> · Compra con los números</p>
+        <p>WASD/flechas para moverte · ratón para apuntar y disparar<br />Tienda con <b>B</b> · compra con los números</p>
         <input id="name" type="text" maxlength="12" placeholder="Tu nombre" autocomplete="off" />
-        <button type="submit">Jugar</button>
+
+        <button id="btn-quick" type="button">Partida rápida</button>
+        <button id="btn-create" type="button" class="secondary">Crear sala privada</button>
+
+        <p class="divider">— o únete a la sala de un amigo —</p>
+        <div class="row">
+          <input id="code" class="code" type="text" maxlength="5" placeholder="CÓDIGO" autocomplete="off" />
+          <button id="btn-join" type="button" class="secondary">Unirse</button>
+        </div>
+
         <div class="error" id="menu-error"></div>
-      </form>
+      </div>
     </div>
     <div id="game"></div>
     <script type="module" src="/src/main.ts"></script>

@@ -45,7 +45,13 @@ npm install          # instala todos los workspaces
 npm run dev          # levanta servidor (puerto 2567) y cliente (puerto 5173)
 ```
 
-Abre <http://localhost:5173> en varias pestañas para probar el multijugador.
+Abre <http://localhost:5173>. Desde el menú puedes:
+
+- **Partida rápida**: entras en una sala pública con hueco (o se crea una nueva).
+- **Crear sala privada**: obtienes un código de 5 letras; solo entra quien lo tenga.
+- **Unirse**: escribe el código de un amigo. También sirve el enlace `http://localhost:5173/?sala=CÓDIGO`.
+
+En la sala de espera el anfitrión pulsa **ENTER** para empezar. Para probar el multijugador en local, abre varias pestañas.
 
 ## Controles
 
@@ -53,6 +59,7 @@ Abre <http://localhost:5173> en varias pestañas para probar el multijugador.
 |---|---|
 | Moverse | WASD o flechas |
 | Apuntar / disparar | Ratón / clic izquierdo |
+| Empezar partida (anfitrión, en el lobby) | ENTER |
 | Abrir tienda | B |
 | Comprar | 1-4 armas · 5-9 mejoras (con la tienda abierta) |
 
@@ -76,7 +83,7 @@ Scripts útiles:
 - [x] Zombies con IA básica y oleadas (walker, runner, tank)
 - [x] Sistema de vida, muerte y reaparición
 - [x] Dinero y tienda de mejoras (armas, chaleco, velocidad, daño, cadencia, vida)
-- [ ] Lobby: crear sala y unirse por código
+- [x] Lobby: crear sala privada, unirse por código o enlace, anfitrión inicia
 - [ ] Sprites, animaciones y sonido
 - [x] HUD (vida, oleada, dinero, arma, marcador)
 - [ ] Despliegue (cliente estático + servidor Node)

@@ -40,11 +40,14 @@ export const Bullet = schema({
 export type Bullet = SchemaType<typeof Bullet>;
 
 export const GameState = schema({
+  code: t.string().default(""),      // código para invitar amigos (= roomId)
+  hostId: t.string().default(""),    // sessionId del anfitrión (puede iniciar la partida)
+  isPrivate: t.boolean().default(false),
   players: t.map(Player),
   zombies: t.map(Zombie),
   bullets: t.map(Bullet),
   wave: t.number().default(0),
-  phase: t.string().default("countdown"),
+  phase: t.string().default("lobby"),
   countdown: t.number().default(0),
   zombiesLeft: t.number().default(0), // vivos + pendientes de aparecer
 }, "GameState");

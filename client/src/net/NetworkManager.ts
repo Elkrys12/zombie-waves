@@ -1,6 +1,6 @@
 import { Client, getStateCallbacks, type Room } from "@colyseus/sdk";
 import type {
-  InputMessage, UpgradeId, WeaponId, JoinOptions,
+  InputMessage, UpgradeId, WeaponId, JoinOptions, CreateRoomOptions,
   PlayerState, ZombieState, BulletState, WavePhase,
 } from "@zombie-waves/shared";
 
@@ -8,6 +8,9 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "ws://localhost:2567";
 
 /** Forma del estado tal y como lo ve el cliente (espejo de GameState del servidor). */
 export interface GameStateView {
+  code: string;
+  hostId: string;
+  isPrivate: boolean;
   players: Map<string, PlayerState>;
   zombies: Map<string, ZombieState>;
   bullets: Map<string, BulletState>;
@@ -24,10 +27,33 @@ export class NetworkManager {
   private lastSentAt = 0;
   room!: Room<GameStateView>;
 
-  async join(name: string) {
+  /** Partida rápida: entra en una sala pública con hueco o crea una nueva. */
+  async quickPlay(name: string) {
     const options: JoinOptions = { name };
     this.room = await this.client.joinOrCreate<GameStateView>("game", options);
     return this.room;
+  }
+
+  /** Crea una sala privada a la que solo se entra con el código. */
+  async createPrivate(name: string) {
+    const options: CreateRoomOptions = { name, private: true };
+    this.room = await this.client.create<GameStateView>("game", options);
+    return this.room;
+  }
+
+  /** Entra en la sala de un amigo por su código (el código es el roomId). */
+  async joinByCode(code: string, name: string) {
+    const options: JoinOptions = { name };
+    this.room = await this.client.joinById<GameStateView>(code.toUpperCase(), options);
+    return this.room;
+  }
+
+  get isHost() {
+    return this.state.hostId === this.sessionId;
+  }
+
+  startGame() {
+    this.room.send("start");
   }
 
   get state(): GameStateView {

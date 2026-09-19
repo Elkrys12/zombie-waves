@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { NetworkManager } from "../net/NetworkManager";
 import {
-  WEAPONS, WEAPON_IDS, UPGRADES, UPGRADE_IDS, upgradeCost,
+  WEAPONS, WEAPON_IDS, UPGRADES, UPGRADE_IDS, upgradeCost, MAX_PLAYERS,
   type WeaponId, type UpgradeId,
 } from "@zombie-waves/shared";
 
@@ -22,6 +22,9 @@ export class HudScene extends Phaser.Scene {
   private shopPanel!: Phaser.GameObjects.Container;
   private shopText!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Text;
+  private lobbyPanel!: Phaser.GameObjects.Container;
+  private lobbyText!: Phaser.GameObjects.Text;
+  private codeText!: Phaser.GameObjects.Text;
   private shopOpen = false;
 
   constructor() {
@@ -55,6 +58,18 @@ export class HudScene extends Phaser.Scene {
 
     this.add.text(20, 0, "B: tienda", { ...FONT, fontSize: "13px", color: "#999999" }).setOrigin(0, 1).setName("hint");
 
+    // Código de sala siempre visible (abajo derecha) para invitar a mitad de partida
+    this.codeText = this.add.text(0, 0, "", { ...FONT, fontSize: "13px", color: "#999999" }).setOrigin(1, 1);
+
+    // Lobby (sala de espera)
+    const lobbyBg = this.add.rectangle(0, 0, 460, 300, 0x0b0b0f, 0.9).setOrigin(0.5).setStrokeStyle(2, 0x7ed957);
+    this.lobbyText = this.add.text(0, 0, "", { ...FONT, fontSize: "16px", align: "center", lineSpacing: 6 }).setOrigin(0.5);
+    this.lobbyPanel = this.add.container(0, 0, [lobbyBg, this.lobbyText]).setVisible(false);
+
+    this.input.keyboard!.on("keydown-ENTER", () => {
+      if (this.net.state.phase === "lobby" && this.net.isHost) this.net.startGame();
+    });
+
     this.input.keyboard!.on("keydown-B", () => {
       this.shopOpen = !this.shopOpen;
       this.shopPanel.setVisible(this.shopOpen);
@@ -80,6 +95,8 @@ export class HudScene extends Phaser.Scene {
     this.scoreText.setX(width - 20);
     this.banner.setPosition(width / 2, height / 2 - 60);
     this.shopPanel.setPosition(width / 2 - 210, height / 2 - 200);
+    this.lobbyPanel.setPosition(width / 2, height / 2);
+    this.codeText.setPosition(width - 20, height - 16);
     (this.children.getByName("hint") as Phaser.GameObjects.Text).setY(height - 16);
   }
 
@@ -94,8 +111,18 @@ export class HudScene extends Phaser.Scene {
     const weapon = WEAPONS[me.weapon as WeaponId];
     this.infoText.setText(`$ ${me.money}\n${weapon.name}\nBajas: ${me.kills}`);
 
+    this.codeText.setText(`Sala: ${state.code}${state.isPrivate ? " (privada)" : ""}`);
+
+    // Lobby
+    const inLobby = state.phase === "lobby";
+    this.lobbyPanel.setVisible(inLobby);
+    if (inLobby) this.renderLobby();
+
     // Oleada
-    if (state.phase === "active") {
+    if (inLobby) {
+      this.waveText.setText("SALA DE ESPERA");
+      this.waveSub.setText("");
+    } else if (state.phase === "active") {
       this.waveText.setText(`OLEADA ${state.wave}`);
       this.waveSub.setText(`Zombies restantes: ${state.zombiesLeft}`);
     } else if (state.phase === "countdown") {
@@ -103,7 +130,7 @@ export class HudScene extends Phaser.Scene {
       this.waveSub.setText(`Siguiente oleada en ${Math.ceil(state.countdown)}s — pulsa B para comprar`);
     } else {
       this.waveText.setText("GAME OVER");
-      this.waveSub.setText(`Llegasteis a la oleada ${state.wave} · reinicio en ${Math.ceil(state.countdown)}s`);
+      this.waveSub.setText(`Llegasteis a la oleada ${state.wave} · vuelta a la sala de espera en ${Math.ceil(state.countdown)}s`);
     }
 
     // Marcador
@@ -117,6 +144,22 @@ export class HudScene extends Phaser.Scene {
     else this.banner.setText("");
 
     if (this.shopOpen) this.renderShop();
+  }
+
+  private renderLobby() {
+    const state = this.net.state;
+    const link = `${location.origin}${location.pathname}?sala=${state.code}`;
+    const lines: string[] = [
+      `CÓDIGO DE SALA:  ${state.code}`,
+      state.isPrivate ? "Sala privada: solo entran con el código" : "Sala pública: puede entrar cualquiera",
+      `Enlace: ${link}`,
+      "",
+      `Jugadores (${state.players.size}/${MAX_PLAYERS}):`,
+    ];
+    state.players.forEach((p, id) => lines.push(`  ${p.name}${id === state.hostId ? "  ★ anfitrión" : ""}`));
+    lines.push("");
+    lines.push(this.net.isHost ? "Pulsa ENTER para empezar" : "Esperando a que el anfitrión empiece...");
+    this.lobbyText.setText(lines.join("\n"));
   }
 
   private renderShop() {

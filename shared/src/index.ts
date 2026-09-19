@@ -92,7 +92,13 @@ export const FIRST_WAVE_COUNTDOWN = 8;
 export const GAME_OVER_DELAY = 6;
 export const BULLET_RADIUS = 4;
 
-export type WavePhase = "countdown" | "active" | "gameover";
+export type WavePhase = "lobby" | "countdown" | "active" | "gameover";
+
+// ---- Salas ----
+export const ROOM_CODE_LENGTH = 5;
+// Sin caracteres ambiguos (0/O, 1/I/L) para dictar el código en voz alta
+export const ROOM_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+export const MAX_PLAYERS = 4;
 
 // ---- Forma del estado sincronizado (para tipar el cliente) ----
 export interface PlayerState {
@@ -148,4 +154,9 @@ export interface BuyWeaponMessage {
 
 export interface JoinOptions {
   name?: string;
+}
+
+export interface CreateRoomOptions extends JoinOptions {
+  /** Sala privada: solo se entra con el código, no por partida rápida */
+  private?: boolean;
 }

@@ -1,4 +1,4 @@
-import { Room, type Client } from "colyseus";
+import { Room, matchMaker, type Client } from "colyseus";
 import { GameState, Player, Zombie, Bullet } from "./GameState.js";
 import {
   MAP_WIDTH, MAP_HEIGHT, TICK_RATE, PLAYER_BASE_SPEED, PLAYER_BASE_HP, PLAYER_RADIUS,
@@ -6,7 +6,8 @@ import {
   VEST_REDUCTION_PER_LEVEL, SPEED_BONUS_PER_LEVEL, DAMAGE_BONUS_PER_LEVEL,
   FIRE_RATE_BONUS_PER_LEVEL, MAX_HP_BONUS_PER_LEVEL,
   WAVE_COUNTDOWN, FIRST_WAVE_COUNTDOWN, GAME_OVER_DELAY, BULLET_RADIUS,
-  type InputMessage, type BuyUpgradeMessage, type BuyWeaponMessage, type JoinOptions,
+  ROOM_CODE_LENGTH, ROOM_CODE_ALPHABET, MAX_PLAYERS,
+  type InputMessage, type BuyUpgradeMessage, type BuyWeaponMessage, type JoinOptions, type CreateRoomOptions,
   type WeaponId, type UpgradeId, type ZombieType,
 } from "@zombie-waves/shared";
 
@@ -27,7 +28,7 @@ interface ZombieData {
  * Los clientes solo envían sus inputs y renderizan el estado sincronizado.
  */
 export class GameRoom extends Room<{ state: GameState }> {
-  maxClients = 4;
+  maxClients = MAX_PLAYERS;
 
   private lastInput = new Map<string, InputMessage>();
   private shootCooldown = new Map<string, number>();
@@ -37,12 +38,25 @@ export class GameRoom extends Room<{ state: GameState }> {
   private spawnTimer = 0;
   private nextId = 1;
 
-  onCreate() {
-    this.setState(new GameState());
-    this.startCountdown(FIRST_WAVE_COUNTDOWN);
+  async onCreate(options: CreateRoomOptions = {}) {
+    // El roomId pasa a ser un código corto que los amigos pueden teclear
+    this.roomId = await this.generateUniqueCode();
+
+    const state = new GameState();
+    state.code = this.roomId;
+    state.isPrivate = options.private === true;
+    this.setState(state);
+
+    // Las salas privadas no aparecen en la partida rápida (joinOrCreate)
+    if (state.isPrivate) await this.setPrivate(true);
 
     this.onMessage("input", (client, input: InputMessage) => {
       this.lastInput.set(client.sessionId, input);
+    });
+
+    this.onMessage("start", (client) => {
+      if (client.sessionId !== this.state.hostId || this.state.phase !== "lobby") return;
+      this.startCountdown(FIRST_WAVE_COUNTDOWN);
     });
 
     this.onMessage("buy_upgrade", (client, msg: BuyUpgradeMessage) => {
@@ -67,6 +81,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     player.alive = this.state.phase !== "active";
     if (!player.alive) player.hp = 0;
     this.state.players.set(client.sessionId, player);
+    if (!this.state.hostId) this.state.hostId = client.sessionId;
     console.log(`[room ${this.roomId}] ${player.name} (${client.sessionId}) se unió`);
   }
 
@@ -75,6 +90,26 @@ export class GameRoom extends Room<{ state: GameState }> {
     this.lastInput.delete(client.sessionId);
     this.shootCooldown.delete(client.sessionId);
     console.log(`[room ${this.roomId}] ${client.sessionId} salió`);
+
+    // Si se va el anfitrión, hereda el rol el siguiente jugador
+    if (client.sessionId === this.state.hostId) {
+      const next = this.state.players.keys().next();
+      this.state.hostId = next.done ? "" : next.value;
+    }
+  }
+
+  // ---------------------------------------------------------------- Código de sala
+
+  private async generateUniqueCode(): Promise<string> {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      let code = "";
+      for (let i = 0; i < ROOM_CODE_LENGTH; i++) {
+        code += ROOM_CODE_ALPHABET[Math.floor(Math.random() * ROOM_CODE_ALPHABET.length)];
+      }
+      const existing = await matchMaker.findRoomsByIds([code]);
+      if (existing.size === 0) return code;
+    }
+    throw new Error("No se pudo generar un código de sala único");
   }
 
   // ---------------------------------------------------------------- Tienda
@@ -182,7 +217,9 @@ export class GameRoom extends Room<{ state: GameState }> {
       player.y = MAP_HEIGHT / 2;
     });
 
-    this.startCountdown(FIRST_WAVE_COUNTDOWN);
+    // De vuelta al lobby: el anfitrión decide cuándo volver a empezar
+    this.state.phase = "lobby";
+    this.state.countdown = 0;
   }
 
   // ---------------------------------------------------------------- Simulación
@@ -196,6 +233,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
   private updatePhase(dt: number) {
     const state = this.state;
+    if (state.phase === "lobby") return;
 
     if (state.phase === "countdown" || state.phase === "gameover") {
       state.countdown = Math.max(0, state.countdown - dt);
