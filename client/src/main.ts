@@ -65,7 +65,11 @@ function describeError(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   if (/not found|no encontrad/i.test(message)) return "No existe ninguna sala con ese código.";
   if (/locked|full|lleno/i.test(message)) return "La sala está llena.";
-  if (/websocket|network|failed to fetch|ECONNREFUSED/i.test(message)) return "No se pudo conectar con el servidor. ¿Está arrancado?";
+  if (/websocket|network|failed to fetch|ECONNREFUSED/i.test(message)) {
+    return location.hostname === "localhost" || location.hostname === "127.0.0.1"
+      ? "No se pudo conectar con el servidor. ¿Está arrancado?"
+      : "No se pudo conectar con el servidor de juego. Comprueba que esté desplegado y configurado.";
+  }
   return `No se pudo entrar: ${message}`;
 }
 

@@ -1,0 +1,12 @@
+# Blueprint de Render (https://render.com): despliega el servidor con un clic
+# desde "New > Blueprint" apuntando a este repositorio.
+services:
+  - type: web
+    name: zombie-waves-server
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 2567

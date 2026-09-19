@@ -4,7 +4,11 @@ import type {
   PlayerState, ZombieState, BulletState, WavePhase,
 } from "@zombie-waves/shared";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "ws://localhost:2567";
+// Prioridad: ?server=wss://... en la URL > variable de build VITE_SERVER_URL > servidor local
+const SERVER_URL =
+  new URLSearchParams(location.search).get("server") ??
+  (import.meta.env.VITE_SERVER_URL as string | undefined) ??
+  "ws://localhost:2567";
 
 /** Forma del estado tal y como lo ve el cliente (espejo de GameState del servidor). */
 export interface GameStateView {

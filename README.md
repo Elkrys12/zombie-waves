@@ -61,6 +61,7 @@ En la sala de espera el anfitrión pulsa **ENTER** para empezar. Para probar el 
 | Apuntar / disparar | Ratón / clic izquierdo |
 | Empezar partida (anfitrión, en el lobby) | ENTER |
 | Abrir tienda | B |
+| Silenciar sonido | M |
 | Comprar | 1-4 armas · 5-9 mejoras (con la tienda abierta) |
 
 Entre oleada y oleada hay 15 s para comprar. Si mueres, reapareces al empezar la siguiente oleada; si mueren todos, la partida se reinicia.
@@ -75,6 +76,29 @@ Scripts útiles:
 | `npm run build` | Compila todo para producción |
 | `npm run typecheck` | Comprueba tipos en todos los workspaces |
 
+## Despliegue online
+
+El cliente es estático y el servidor es un proceso Node con WebSockets, así que se despliegan por separado:
+
+### 1. Servidor (Render, gratis)
+
+1. Crea una cuenta en <https://render.com> y entra en **New > Blueprint**.
+2. Conecta este repositorio: Render lee `render.yaml` y construye el `Dockerfile`.
+3. Al terminar tendrás una URL tipo `https://zombie-waves-server.onrender.com`. Comprueba `/health`.
+
+> El plan gratuito "duerme" tras 15 min sin uso; la primera conexión puede tardar ~30 s en despertar.
+
+Cualquier otro proveedor que ejecute Docker o Node sirve igual (Railway, Fly.io, un VPS...). El servidor solo necesita la variable `PORT`.
+
+### 2. Cliente (GitHub Pages, automático)
+
+Cada push a `main` ejecuta [deploy-client.yml](.github/workflows/deploy-client.yml) y publica el cliente en
+<https://elkrys12.github.io/zombie-waves/>.
+
+Para que apunte a tu servidor, define la variable de repositorio **`VITE_SERVER_URL`** (Settings > Secrets and variables > Actions > Variables) con la URL del servidor usando `wss://`, por ejemplo `wss://zombie-waves-server.onrender.com`, y vuelve a lanzar el workflow.
+
+Mientras tanto puedes probar cualquier servidor sin reconstruir añadiendo `?server=wss://tu-servidor` a la URL del cliente.
+
 ## Roadmap
 
 - [x] Estructura del monorepo y stack
@@ -84,6 +108,6 @@ Scripts útiles:
 - [x] Sistema de vida, muerte y reaparición
 - [x] Dinero y tienda de mejoras (armas, chaleco, velocidad, daño, cadencia, vida)
 - [x] Lobby: crear sala privada, unirse por código o enlace, anfitrión inicia
-- [ ] Sprites, animaciones y sonido
+- [x] Sprites procedurales, animaciones, efectos y sonido sintetizado (M para silenciar)
 - [x] HUD (vida, oleada, dinero, arma, marcador)
-- [ ] Despliegue (cliente estático + servidor Node)
+- [x] Despliegue: cliente en GitHub Pages (automático) + servidor en Render (Dockerfile + blueprint)
