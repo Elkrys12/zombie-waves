@@ -1,6 +1,6 @@
 # 🧟 Zombie Waves
 
-Juego multijugador online de disparos con oleadas de zombies, jugable desde el navegador. Vista cenital (top-down), movimiento en 4 direcciones y apuntado con el ratón. Sobrevive junto a tus amigos, gana dinero por cada zombie y compra mejoras entre oleadas: armas, chaleco, velocidad, daño y más.
+Juego multijugador online de disparos con oleadas de zombies, jugable desde el navegador. Vista cenital (top-down), movimiento en 4 direcciones y apuntado con el ratón. Sobrevive junto a tus amigos en un pueblo de 3200×3200 px con barrio, plaza, parque, aparcamiento, almacén y campo; los edificios, muros, coches y árboles bloquean el paso (y los muros y edificios, también las balas). Gana dinero por cada zombie y compra mejoras entre oleadas: armas, chaleco, velocidad, daño y más. De noche solo ves lo que ilumina tu linterna.
 
 ## Stack
 
@@ -62,6 +62,8 @@ En la sala de espera el anfitrión pulsa **ENTER** para empezar. Para probar el 
 | Empezar partida (anfitrión, en el lobby) | ENTER |
 | Abrir tienda | B |
 | Silenciar sonido | M |
+
+El minimapa (abajo a la derecha) muestra el mapa completo, tus compañeros, los zombies y los puntos por donde entran (círculos rojos).
 | Comprar | 1-4 armas · 5-9 mejoras (con la tienda abierta) |
 
 Entre oleada y oleada hay 15 s para comprar. Si mueres, reapareces al empezar la siguiente oleada; si mueren todos, la partida se reinicia.
@@ -90,6 +92,18 @@ El cliente es estático y el servidor es un proceso Node con WebSockets, así qu
 
 Cualquier otro proveedor que ejecute Docker o Node sirve igual (Railway, Fly.io, un VPS...). El servidor solo necesita la variable `PORT`.
 
+### Alternativa: servidor propio con nginx (VPS, Proxmox...)
+
+En [deploy/](deploy/) hay un ejemplo de `nginx.conf` (cliente estático en `/` y servidor proxificado en `/ws/` con soporte WebSocket) y una unidad `systemd` para el servidor. Pasos:
+
+```bash
+git clone https://github.com/Elkrys12/zombie-waves /opt/zombie-waves && cd /opt/zombie-waves
+npm ci
+VITE_SERVER_URL=wss://juego.midominio.com/ws npm run build -w client   # ws:// si no hay TLS
+sudo cp -r client/dist/* /var/www/zombie-waves/
+sudo cp deploy/zombie-waves.service /etc/systemd/system/ && sudo systemctl enable --now zombie-waves
+```
+
 ### 2. Cliente (GitHub Pages, automático)
 
 Cada push a `main` ejecuta [deploy-client.yml](.github/workflows/deploy-client.yml) y publica el cliente en
@@ -100,6 +114,9 @@ Para que apunte a tu servidor, define la variable de repositorio **`VITE_SERVER_
 Mientras tanto puedes probar cualquier servidor sin reconstruir añadiendo `?server=wss://tu-servidor` a la URL del cliente.
 
 ## Roadmap
+
+- [x] Mapa grande con zonas (barrio, plaza, parque, aparcamiento, almacén, campo), obstáculos con colisión y balas bloqueadas por muros
+- [x] Iluminación (día en el lobby, noche en las oleadas con linterna por jugador y fogonazos), minimapa y HUD rediseñado
 
 - [x] Estructura del monorepo y stack
 - [x] Conexión cliente-servidor y movimiento sincronizado

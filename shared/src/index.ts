@@ -4,8 +4,7 @@
  */
 
 // ---- Mapa y física ----
-export const MAP_WIDTH = 2000;
-export const MAP_HEIGHT = 2000;
+export * from "./map.js";
 export const TICK_RATE = 20; // simulaciones por segundo en el servidor
 
 // ---- Jugador ----

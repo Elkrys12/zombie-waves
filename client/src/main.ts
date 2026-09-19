@@ -83,6 +83,8 @@ function startGame(net: NetworkManager) {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
+    // En modo prueba (?auto=1) conservamos el buffer para que las capturas headless no salgan negras
+    render: { preserveDrawingBuffer: !!params.get("auto") },
     scene: [GameScene, HudScene],
     callbacks: {
       // La conexión ya está abierta: la dejamos en el registry antes de que arranquen las escenas

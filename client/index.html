@@ -5,39 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Zombie Waves</title>
     <style>
-      html, body { margin: 0; padding: 0; background: #0b0b0f; overflow: hidden; font-family: system-ui, sans-serif; }
+      html, body { margin: 0; padding: 0; background: #0b0b0f; overflow: hidden; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
       #game { width: 100vw; height: 100vh; }
       #menu {
-        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-        background: radial-gradient(circle at center, #1c1c26 0%, #0b0b0f 70%);
-        color: #eee; z-index: 10;
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10; color: #eee;
+        background:
+          radial-gradient(ellipse at 50% 40%, rgba(126,217,87,0.10) 0%, rgba(0,0,0,0) 55%),
+          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+          #0b0b0f;
+        background-size: auto, 48px 48px, 48px 48px, auto;
       }
+      #menu::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 220px 60px #000; }
       #menu.hidden { display: none; }
-      #menu .panel { display: flex; flex-direction: column; gap: 12px; width: 320px; text-align: center; }
-      #menu h1 { margin: 0 0 4px; font-size: 42px; letter-spacing: 2px; color: #7ed957; }
-      #menu p { margin: 0; color: #999; font-size: 13px; line-height: 1.5; }
+      #menu .panel {
+        position: relative; z-index: 1; display: flex; flex-direction: column; gap: 12px; width: 340px; text-align: center;
+        padding: 28px 28px 22px; border-radius: 14px; background: rgba(12,13,20,0.85); border: 1px solid rgba(126,217,87,0.35);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+      }
+      #menu .panel::before { content: ""; position: absolute; top: 0; left: 14px; right: 14px; height: 3px; border-radius: 0 0 4px 4px; background: #7ed957; }
+      #menu h1 { margin: 0; font-size: 40px; letter-spacing: 3px; color: #7ed957; text-shadow: 0 0 24px rgba(126,217,87,0.45), 0 3px 0 #2f5a24; }
+      #menu h1 small { display: block; font-size: 12px; letter-spacing: 6px; color: #9aa0a6; text-shadow: none; margin-top: 2px; }
+      #menu p { margin: 0; color: #9aa0a6; font-size: 13px; line-height: 1.5; }
       #menu input {
-        padding: 12px; font-size: 16px; border-radius: 6px; border: 1px solid #444;
-        background: #16161d; color: #eee; text-align: center; width: 100%; box-sizing: border-box;
+        padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #333844;
+        background: #16161d; color: #eee; text-align: center; width: 100%; box-sizing: border-box; outline: none;
       }
-      #menu input.code { text-transform: uppercase; letter-spacing: 4px; font-family: monospace; }
+      #menu input:focus { border-color: #7ed957; box-shadow: 0 0 0 3px rgba(126,217,87,0.15); }
+      #menu input.code { text-transform: uppercase; letter-spacing: 5px; font-family: Consolas, Menlo, monospace; }
       #menu button {
-        padding: 12px; font-size: 15px; border-radius: 6px; border: none; cursor: pointer;
-        background: #7ed957; color: #0b0b0f; font-weight: bold; width: 100%;
+        padding: 12px; font-size: 15px; border-radius: 8px; border: none; cursor: pointer; width: 100%;
+        background: linear-gradient(#95e874, #6cc84a); color: #0b0b0f; font-weight: 700; letter-spacing: 0.5px;
+        box-shadow: 0 3px 0 #3f7a2a; transition: transform 0.05s, filter 0.1s;
       }
-      #menu button.secondary { background: #2b2b38; color: #eee; }
-      #menu button:hover { filter: brightness(1.15); }
-      #menu button:disabled { opacity: 0.5; cursor: default; }
+      #menu button.secondary { background: linear-gradient(#333844, #262b36); color: #eee; box-shadow: 0 3px 0 #14171d; }
+      #menu button:hover { filter: brightness(1.12); }
+      #menu button:active { transform: translateY(2px); box-shadow: none; }
+      #menu button:disabled { opacity: 0.5; cursor: default; transform: none; }
       #menu .row { display: flex; gap: 8px; }
-      #menu .divider { color: #555; font-size: 12px; margin: 6px 0 0; }
+      #menu .divider { color: #555c66; font-size: 12px; margin: 4px 0 0; }
       #menu .error { color: #ff6b6b; min-height: 18px; font-size: 13px; }
+      #menu .foot { color: #555c66; font-size: 11px; margin-top: 2px; }
     </style>
   </head>
   <body>
     <div id="menu">
       <div class="panel">
-        <h1>ZOMBIE WAVES</h1>
-        <p>WASD/flechas para moverte · ratón para apuntar y disparar<br />Tienda con <b>B</b> · compra con los números</p>
+        <h1>ZOMBIE WAVES<small>SOBREVIVE CON TUS AMIGOS</small></h1>
+        <p>Oleadas de zombies, mejoras y un pueblo entero que explorar.</p>
         <input id="name" type="text" maxlength="12" placeholder="Tu nombre" autocomplete="off" />
 
         <button id="btn-quick" type="button">Partida rápida</button>
@@ -50,6 +65,7 @@
         </div>
 
         <div class="error" id="menu-error"></div>
+        <div class="foot">WASD · ratón · B tienda · M sonido · ENTER empieza (anfitrión)</div>
       </div>
     </div>
     <div id="game"></div>

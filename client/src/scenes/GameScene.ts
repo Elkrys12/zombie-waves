@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import type { NetworkManager } from "../net/NetworkManager";
 import { SoundManager } from "../audio/SoundManager";
 import { generateTextures, PLAYER_COLORS } from "../gfx/textures";
+import { MapRenderer } from "../gfx/MapRenderer";
+import { Lighting } from "../gfx/Lighting";
 import {
   MAP_WIDTH, MAP_HEIGHT, PLAYER_RADIUS, ZOMBIES,
   type PlayerState, type ZombieState, type BulletState, type WeaponId, type WavePhase,
@@ -46,6 +48,7 @@ export class GameScene extends Phaser.Scene {
   private decals: Phaser.GameObjects.Image[] = [];
   private blood!: Phaser.GameObjects.Particles.ParticleEmitter;
   private damageFlash!: Phaser.GameObjects.Rectangle;
+  private lighting!: Lighting;
   private keys!: Record<"W" | "A" | "S" | "D" | "UP" | "DOWN" | "LEFT" | "RIGHT", Phaser.Input.Keyboard.Key>;
   private colorIndex = 0;
 
@@ -62,10 +65,10 @@ export class GameScene extends Phaser.Scene {
 
     generateTextures(this);
 
-    // Mapa
+    // Mapa e iluminación
     this.cameras.main.setBounds(0, 0, MAP_WIDTH, MAP_HEIGHT);
-    this.add.tileSprite(0, 0, MAP_WIDTH, MAP_HEIGHT, "floor").setOrigin(0).setDepth(0);
-    this.add.rectangle(0, 0, MAP_WIDTH, MAP_HEIGHT).setOrigin(0).setStrokeStyle(6, 0x7ed957, 0.5).setDepth(1);
+    new MapRenderer(this).draw();
+    this.lighting = new Lighting(this);
 
     // Partículas de sangre (se disparan con explode)
     this.blood = this.add.particles(0, 0, "particle", {
@@ -97,7 +100,7 @@ export class GameScene extends Phaser.Scene {
     $(state).players.onAdd((player: PlayerState, id: string) => {
       const isMe = id === this.net.sessionId;
       const body = this.add.image(0, 0, `player_${this.colorIndex++ % PLAYER_COLORS.length}`);
-      const gun = this.add.image(PLAYER_RADIUS - 2, 6, "gun").setOrigin(0, 0.5);
+      const gun = this.add.image(PLAYER_RADIUS - 2, 7, `gun_${player.weapon}`).setOrigin(0, 0.5);
       const root = this.add.container(player.x, player.y, [gun, body]).setDepth(10);
       const name = this.add.text(0, 0, player.name, { fontSize: "12px", color: "#fff", fontFamily: "system-ui", stroke: "#000", strokeThickness: 3 })
         .setOrigin(0.5, 1).setDepth(12);
@@ -178,9 +181,10 @@ export class GameScene extends Phaser.Scene {
     const me = this.net.me;
     if (!owner) return;
 
-    // Fogonazo en la boca del arma
+    // Fogonazo en la boca del arma (sprite + luz)
     const flash = this.add.image(bullet.x, bullet.y, "flash").setOrigin(0, 0.5).setRotation(bullet.angle).setDepth(11);
     this.time.delayedCall(60, () => flash.destroy());
+    this.lighting.addFlash(bullet.x, bullet.y);
 
     // Volumen según distancia al jugador local (la escopeta dispara 6 balas: solo suena una)
     const distance = me ? Math.hypot(owner.x - me.x, owner.y - me.y) : 0;
@@ -209,11 +213,29 @@ export class GameScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ bucle
 
-  update(time: number) {
+  update(time: number, delta: number) {
     this.sendInput(time);
     this.syncPlayers(time);
     this.syncZombies(time);
     this.syncBullets();
+    this.updateLighting(delta / 1000);
+  }
+
+  private updateLighting(dt: number) {
+    const lights: { x: number; y: number; radius: number }[] = [];
+    this.players.forEach((view, id) => {
+      const player = this.net.state.players.get(id);
+      if (!player) return;
+      // Los muertos conservan una luz tenue para poder seguir la partida
+      const radius = !player.alive ? 220 : id === this.net.sessionId ? 420 : 300;
+      lights.push({ x: view.root.x, y: view.root.y, radius });
+    });
+    // Las balas iluminan un poco a su paso
+    this.bullets.forEach((b) => lights.push({ x: b.x, y: b.y, radius: 60 }));
+    // De día en la sala de espera; anochece cuando empieza la acción
+    const target = this.net.state.phase === "active" || this.net.state.phase === "gameover" ? 0.78 : 0.45;
+    this.lighting.darkness = Phaser.Math.Linear(this.lighting.darkness, target, Math.min(1, dt * 0.8));
+    this.lighting.update(dt, lights);
   }
 
   private sendInput(time: number) {
@@ -249,6 +271,8 @@ export class GameScene extends Phaser.Scene {
       const bob = view.moving && player.alive ? 1 + Math.sin(time / 60) * 0.05 : 1;
       view.body.setScale(bob, 2 - bob);
       view.gun.setVisible(player.alive);
+      const gunKey = `gun_${player.weapon}`;
+      if (view.gun.texture.key !== gunKey) view.gun.setTexture(gunKey);
 
       view.name.setPosition(view.root.x, view.root.y - PLAYER_RADIUS - 12);
       view.hpBg.setPosition(view.root.x, view.root.y - PLAYER_RADIUS - 6);

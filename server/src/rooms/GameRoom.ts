@@ -7,6 +7,7 @@ import {
   FIRE_RATE_BONUS_PER_LEVEL, MAX_HP_BONUS_PER_LEVEL,
   WAVE_COUNTDOWN, FIRST_WAVE_COUNTDOWN, GAME_OVER_DELAY, BULLET_RADIUS,
   ROOM_CODE_LENGTH, ROOM_CODE_ALPHABET, MAX_PLAYERS,
+  ZOMBIE_SPAWNS, PLAYER_SPAWN, resolveCircleCollisions, pointBlocked,
   type InputMessage, type BuyUpgradeMessage, type BuyWeaponMessage, type JoinOptions, type CreateRoomOptions,
   type WeaponId, type UpgradeId, type ZombieType,
 } from "@zombie-waves/shared";
@@ -21,6 +22,9 @@ interface BulletData {
 
 interface ZombieData {
   attackTimer: number;
+  stuckTimer: number; // tiempo que lleva sin avanzar (atascado en una esquina)
+  detour: number; // ángulo de desvío mientras se desatasca (NaN = ninguno)
+  detourTimer: number;
 }
 
 /**
@@ -75,8 +79,7 @@ export class GameRoom extends Room<{ state: GameState }> {
   onJoin(client: Client, options: JoinOptions = {}) {
     const player = new Player();
     player.name = (options.name ?? "").trim().slice(0, 12) || `Jugador ${this.state.players.size + 1}`;
-    player.x = MAP_WIDTH / 2 + (Math.random() - 0.5) * 100;
-    player.y = MAP_HEIGHT / 2 + (Math.random() - 0.5) * 100;
+    this.placeAtSpawn(player);
     // Si entra en mitad de una oleada, espera muerto a la siguiente para no aparecer rodeado
     player.alive = this.state.phase !== "active";
     if (!player.alive) player.hp = 0;
@@ -96,6 +99,15 @@ export class GameRoom extends Room<{ state: GameState }> {
       const next = this.state.players.keys().next();
       this.state.hostId = next.done ? "" : next.value;
     }
+  }
+
+  /** Coloca al jugador en un punto libre alrededor de la plaza. */
+  private placeAtSpawn(player: Player) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 60 + Math.random() * (PLAYER_SPAWN.radius - 60);
+    const pos = resolveCircleCollisions(PLAYER_SPAWN.x + Math.cos(angle) * dist, PLAYER_SPAWN.y + Math.sin(angle) * dist, PLAYER_RADIUS);
+    player.x = pos.x;
+    player.y = pos.y;
   }
 
   // ---------------------------------------------------------------- Código de sala
@@ -155,8 +167,7 @@ export class GameRoom extends Room<{ state: GameState }> {
       if (!player.alive) {
         player.alive = true;
         player.hp = player.maxHp;
-        player.x = MAP_WIDTH / 2;
-        player.y = MAP_HEIGHT / 2;
+        this.placeAtSpawn(player);
       }
     });
 
@@ -182,18 +193,19 @@ export class GameRoom extends Room<{ state: GameState }> {
     zombie.hp = config.hp;
     zombie.maxHp = config.hp;
 
-    // Aparece en un borde aleatorio del mapa
-    const edge = Math.floor(Math.random() * 4);
-    switch (edge) {
-      case 0: zombie.x = Math.random() * MAP_WIDTH; zombie.y = 0; break;
-      case 1: zombie.x = Math.random() * MAP_WIDTH; zombie.y = MAP_HEIGHT; break;
-      case 2: zombie.x = 0; zombie.y = Math.random() * MAP_HEIGHT; break;
-      default: zombie.x = MAP_WIDTH; zombie.y = Math.random() * MAP_HEIGHT;
-    }
+    // Aparece en uno de los puntos de entrada del mapa, con algo de dispersión
+    const spawn = ZOMBIE_SPAWNS[Math.floor(Math.random() * ZOMBIE_SPAWNS.length)];
+    const pos = resolveCircleCollisions(
+      Math.max(config.radius, Math.min(MAP_WIDTH - config.radius, spawn.x + (Math.random() - 0.5) * 120)),
+      Math.max(config.radius, Math.min(MAP_HEIGHT - config.radius, spawn.y + (Math.random() - 0.5) * 120)),
+      config.radius,
+    );
+    zombie.x = pos.x;
+    zombie.y = pos.y;
 
     const id = `z${this.nextId++}`;
     this.state.zombies.set(id, zombie);
-    this.zombieData.set(id, { attackTimer: 0 });
+    this.zombieData.set(id, { attackTimer: 0, stuckTimer: 0, detour: NaN, detourTimer: 0 });
   }
 
   private resetGame() {
@@ -213,8 +225,7 @@ export class GameRoom extends Room<{ state: GameState }> {
       player.vest = player.speed = player.damage = player.fire_rate = player.max_hp = 0;
       player.maxHp = PLAYER_BASE_HP;
       player.hp = PLAYER_BASE_HP;
-      player.x = MAP_WIDTH / 2;
-      player.y = MAP_HEIGHT / 2;
+      this.placeAtSpawn(player);
     });
 
     // De vuelta al lobby: el anfitrión decide cuándo volver a empezar
@@ -287,8 +298,13 @@ export class GameRoom extends Room<{ state: GameState }> {
       }
 
       const speed = PLAYER_BASE_SPEED * (1 + player.speed * SPEED_BONUS_PER_LEVEL);
-      player.x = Math.max(PLAYER_RADIUS, Math.min(MAP_WIDTH - PLAYER_RADIUS, player.x + dx * speed * dt));
-      player.y = Math.max(PLAYER_RADIUS, Math.min(MAP_HEIGHT - PLAYER_RADIUS, player.y + dy * speed * dt));
+      const pos = resolveCircleCollisions(
+        Math.max(PLAYER_RADIUS, Math.min(MAP_WIDTH - PLAYER_RADIUS, player.x + dx * speed * dt)),
+        Math.max(PLAYER_RADIUS, Math.min(MAP_HEIGHT - PLAYER_RADIUS, player.y + dy * speed * dt)),
+        PLAYER_RADIUS,
+      );
+      player.x = pos.x;
+      player.y = pos.y;
       player.angle = input.angle;
 
       if (input.shooting && cooldown <= 0 && this.state.phase === "active") {
@@ -332,7 +348,7 @@ export class GameRoom extends Room<{ state: GameState }> {
       bullet.y += data.vy * dt;
       data.remaining -= step;
 
-      if (data.remaining <= 0 || bullet.x < 0 || bullet.x > MAP_WIDTH || bullet.y < 0 || bullet.y > MAP_HEIGHT) {
+      if (data.remaining <= 0 || bullet.x < 0 || bullet.x > MAP_WIDTH || bullet.y < 0 || bullet.y > MAP_HEIGHT || pointBlocked(bullet.x, bullet.y)) {
         toRemove.push(id);
         return;
       }
@@ -392,11 +408,36 @@ export class GameRoom extends Room<{ state: GameState }> {
 
       const reach = config.radius + PLAYER_RADIUS;
       if (best > reach) {
-        const nx = (target.x - zombie.x) / best;
-        const ny = (target.y - zombie.y) / best;
+        let dir = Math.atan2(target.y - zombie.y, target.x - zombie.x);
+
+        // Si lleva un rato sin avanzar (esquina de un edificio), rodea durante un momento
+        if (!Number.isNaN(data.detour)) {
+          dir = data.detour;
+          data.detourTimer -= dt;
+          if (data.detourTimer <= 0) data.detour = NaN;
+        }
+
         const step = Math.min(config.speed * dt, best - reach);
-        zombie.x += nx * step;
-        zombie.y += ny * step;
+        const before = { x: zombie.x, y: zombie.y };
+        const pos = resolveCircleCollisions(
+          Math.max(config.radius, Math.min(MAP_WIDTH - config.radius, zombie.x + Math.cos(dir) * step)),
+          Math.max(config.radius, Math.min(MAP_HEIGHT - config.radius, zombie.y + Math.sin(dir) * step)),
+          config.radius,
+        );
+        zombie.x = pos.x;
+        zombie.y = pos.y;
+
+        const moved = Math.hypot(zombie.x - before.x, zombie.y - before.y);
+        if (moved < step * 0.3 && Number.isNaN(data.detour)) {
+          data.stuckTimer += dt;
+          if (data.stuckTimer > 0.4) {
+            data.stuckTimer = 0;
+            data.detour = dir + (Math.random() < 0.5 ? 1 : -1) * (Math.PI / 2 + Math.random() * 0.6);
+            data.detourTimer = 0.8 + Math.random() * 0.8;
+          }
+        } else if (moved >= step * 0.3) {
+          data.stuckTimer = 0;
+        }
       } else if (data.attackTimer <= 0) {
         data.attackTimer = config.attackCooldown;
         this.damagePlayer(target, config.damage);
