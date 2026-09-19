@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { NetworkManager } from "../net/NetworkManager";
+import type { SoundManager } from "../audio/SoundManager";
 import {
   WEAPONS, WEAPON_IDS, UPGRADES, UPGRADE_IDS, upgradeCost, MAX_PLAYERS,
   type WeaponId, type UpgradeId,
@@ -25,6 +26,8 @@ export class HudScene extends Phaser.Scene {
   private lobbyPanel!: Phaser.GameObjects.Container;
   private lobbyText!: Phaser.GameObjects.Text;
   private codeText!: Phaser.GameObjects.Text;
+  private hint!: Phaser.GameObjects.Text;
+  private sfx!: SoundManager;
   private shopOpen = false;
 
   constructor() {
@@ -33,6 +36,7 @@ export class HudScene extends Phaser.Scene {
 
   create() {
     this.net = this.registry.get("net") as NetworkManager;
+    this.sfx = this.registry.get("sfx") as SoundManager;
 
     // Vida (arriba izquierda)
     this.add.rectangle(20, 20, 220, 22, 0x000000, 0.6).setOrigin(0);
@@ -56,7 +60,12 @@ export class HudScene extends Phaser.Scene {
     this.shopText = this.add.text(16, 12, "", { ...FONT, fontSize: "14px", lineSpacing: 5 });
     this.shopPanel = this.add.container(0, 0, [bg, this.shopText]).setVisible(false);
 
-    this.add.text(20, 0, "B: tienda", { ...FONT, fontSize: "13px", color: "#999999" }).setOrigin(0, 1).setName("hint");
+    this.input.keyboard!.on("keydown-M", () => {
+      const muted = this.sfx.toggleMute();
+      this.hint.setText(muted ? "B: tienda · M: sonido (silenciado)" : "B: tienda · M: sonido");
+    });
+
+    this.hint = this.add.text(20, 0, "B: tienda · M: sonido", { ...FONT, fontSize: "13px", color: "#999999" }).setOrigin(0, 1);
 
     // Código de sala siempre visible (abajo derecha) para invitar a mitad de partida
     this.codeText = this.add.text(0, 0, "", { ...FONT, fontSize: "13px", color: "#999999" }).setOrigin(1, 1);
@@ -80,8 +89,7 @@ export class HudScene extends Phaser.Scene {
       if (!this.shopOpen) return;
       const n = Number(event.key);
       if (!Number.isInteger(n)) return;
-      if (n >= 1 && n <= WEAPON_IDS.length) this.net.buyWeapon(WEAPON_IDS[n - 1]);
-      else if (n >= 5 && n - 5 < UPGRADE_IDS.length) this.net.buyUpgrade(UPGRADE_IDS[n - 5]);
+      this.tryBuy(n);
     });
 
     this.scale.on("resize", () => this.layout());
@@ -97,7 +105,7 @@ export class HudScene extends Phaser.Scene {
     this.shopPanel.setPosition(width / 2 - 210, height / 2 - 200);
     this.lobbyPanel.setPosition(width / 2, height / 2);
     this.codeText.setPosition(width - 20, height - 16);
-    (this.children.getByName("hint") as Phaser.GameObjects.Text).setY(height - 16);
+    this.hint.setY(height - 16);
   }
 
   update() {
@@ -144,6 +152,23 @@ export class HudScene extends Phaser.Scene {
     else this.banner.setText("");
 
     if (this.shopOpen) this.renderShop();
+  }
+
+  /** Compra con validación local para dar feedback inmediato (el servidor vuelve a validar). */
+  private tryBuy(n: number) {
+    const me = this.net.me;
+    if (!me) return;
+
+    if (n >= 1 && n <= WEAPON_IDS.length) {
+      const id = WEAPON_IDS[n - 1];
+      if (me.weapon === id || me.money < WEAPONS[id].cost) return this.sfx.denied();
+      this.net.buyWeapon(id);
+    } else if (n >= 5 && n - 5 < UPGRADE_IDS.length) {
+      const id = UPGRADE_IDS[n - 5];
+      const level = me[id];
+      if (level >= UPGRADES[id].maxLevel || me.money < upgradeCost(id, level)) return this.sfx.denied();
+      this.net.buyUpgrade(id);
+    }
   }
 
   private renderLobby() {

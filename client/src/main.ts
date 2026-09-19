@@ -16,6 +16,13 @@ nameInput.value = localStorage.getItem("zw-name") ?? "";
 const sharedCode = new URLSearchParams(location.search).get("sala");
 if (sharedCode) codeInput.value = sharedCode.toUpperCase();
 
+// Ayuda para pruebas: ?auto=1 entra directamente (en la sala de ?sala=, o partida rápida)
+const params = new URLSearchParams(location.search);
+if (params.get("auto")) {
+  if (params.get("name")) nameInput.value = params.get("name")!;
+  queueMicrotask(() => document.getElementById(sharedCode ? "btn-join" : "btn-quick")!.click());
+}
+
 codeInput.addEventListener("input", () => {
   codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 });
@@ -45,6 +52,8 @@ async function connect(action: (net: NetworkManager, name: string) => Promise<un
     await action(net, name);
     menu.classList.add("hidden");
     startGame(net);
+    // ?start=1 (pruebas): el anfitrión arranca la partida sin pulsar ENTER
+    if (params.get("start")) setTimeout(() => net.startGame(), 500);
   } catch (err) {
     console.error(err);
     errorBox.textContent = describeError(err);
@@ -62,7 +71,8 @@ function describeError(err: unknown): string {
 
 function startGame(net: NetworkManager) {
   new Phaser.Game({
-    type: Phaser.AUTO,
+    // ?renderer=canvas (pruebas): fuerza Canvas 2D, útil en navegadores headless sin WebGL
+    type: params.get("renderer") === "canvas" ? Phaser.CANVAS : Phaser.AUTO,
     parent: "game",
     backgroundColor: "#1a1a22",
     scale: {

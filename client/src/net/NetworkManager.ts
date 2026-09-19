@@ -31,21 +31,28 @@ export class NetworkManager {
   async quickPlay(name: string) {
     const options: JoinOptions = { name };
     this.room = await this.client.joinOrCreate<GameStateView>("game", options);
-    return this.room;
+    return this.waitForState();
   }
 
   /** Crea una sala privada a la que solo se entra con el código. */
   async createPrivate(name: string) {
     const options: CreateRoomOptions = { name, private: true };
     this.room = await this.client.create<GameStateView>("game", options);
-    return this.room;
+    return this.waitForState();
   }
 
   /** Entra en la sala de un amigo por su código (el código es el roomId). */
   async joinByCode(code: string, name: string) {
     const options: JoinOptions = { name };
     this.room = await this.client.joinById<GameStateView>(code.toUpperCase(), options);
-    return this.room;
+    return this.waitForState();
+  }
+
+  /** El estado completo llega en un mensaje aparte tras unirse: esperamos a tenerlo antes de dibujar nada. */
+  private waitForState(): Promise<Room<GameStateView>> {
+    const room = this.room;
+    if (room.state?.players) return Promise.resolve(room);
+    return new Promise((resolve) => room.onStateChange.once(() => resolve(room)));
   }
 
   get isHost() {
