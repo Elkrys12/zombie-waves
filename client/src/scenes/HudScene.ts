@@ -41,6 +41,8 @@ export class HudScene extends Phaser.Scene {
   private shopText!: Phaser.GameObjects.Text;
   private lobbyPanel!: Phaser.GameObjects.Container;
   private lobbyText!: Phaser.GameObjects.Text;
+  private pausePanel!: Phaser.GameObjects.Container;
+  private pauseOpen = false;
   private shopOpen = false;
 
   constructor() {
@@ -78,7 +80,7 @@ export class HudScene extends Phaser.Scene {
 
     // ---- Aviso central y ayuda
     this.banner = this.text(0, 0, "", 34, C.danger, "bold").setOrigin(0.5).setAlign("center").setShadow(0, 3, "#000", 6);
-    this.hint = this.text(0, 0, "B: tienda · M: sonido", 12, C.muted).setOrigin(0, 1);
+    this.hint = this.text(0, 0, "B: tienda · M: sonido · ESC: menú", 12, C.muted).setOrigin(0, 1);
 
     // ---- Tienda
     this.shopPanel = this.panel(0, 0, 520, 420).setVisible(false);
@@ -90,8 +92,16 @@ export class HudScene extends Phaser.Scene {
     this.lobbyText = this.text(250, 160, "", 16, C.text).setOrigin(0.5).setAlign("center").setLineSpacing(6);
     this.lobbyPanel.add(this.lobbyText);
 
+    // ---- Menú de pausa (ESC)
+    this.pausePanel = this.panel(0, 0, 360, 190).setVisible(false).setDepth(200);
+    this.pausePanel.add(this.text(180, 18, "MENÚ", 20, C.text, "bold").setOrigin(0.5, 0));
+    this.pausePanel.add(this.button(180, 70, 300, "Seguir jugando  (ESC)", () => this.togglePause(false)));
+    this.pausePanel.add(this.button(180, 124, 300, "Salir al menú principal  (Q)", () => this.exitGame(), true));
+
     // ---- Teclas
     const kb = this.input.keyboard!;
+    kb.on("keydown-ESC", () => this.togglePause(!this.pauseOpen));
+    kb.on("keydown-Q", () => { if (this.pauseOpen) this.exitGame(); });
     kb.on("keydown-ENTER", () => {
       if (this.net.state.phase === "lobby" && this.net.isHost) this.net.startGame();
     });
@@ -101,7 +111,7 @@ export class HudScene extends Phaser.Scene {
     });
     kb.on("keydown-M", () => {
       const muted = this.sfx.toggleMute();
-      this.hint.setText(muted ? "B: tienda · M: sonido (silenciado)" : "B: tienda · M: sonido");
+      this.hint.setText(muted ? "B: tienda · M: sonido (silenciado) · ESC: menú" : "B: tienda · M: sonido · ESC: menú");
     });
     kb.on("keydown", (event: KeyboardEvent) => {
       if (!this.shopOpen) return;
@@ -123,6 +133,28 @@ export class HudScene extends Phaser.Scene {
     return this.add.container(x, y, [g]);
   }
 
+  /** Botón clicable centrado en (x, y). */
+  private button(x: number, y: number, w: number, label: string, onClick: () => void, danger = false) {
+    const bg = this.add.rectangle(x, y, w, 40, danger ? 0x5a1f1f : 0x2b2b38).setStrokeStyle(2, danger ? 0xff6b6b : 0x7ed957, 0.7);
+    const txt = this.text(x, y, label, 15, C.text, "bold").setOrigin(0.5);
+    bg.setInteractive({ useHandCursor: true })
+      .on("pointerover", () => bg.setFillStyle(danger ? 0x7a2a2a : 0x3a3a4a))
+      .on("pointerout", () => bg.setFillStyle(danger ? 0x5a1f1f : 0x2b2b38))
+      .on("pointerdown", onClick);
+    return this.add.container(0, 0, [bg, txt]);
+  }
+
+  private togglePause(open: boolean) {
+    this.pauseOpen = open;
+    this.pausePanel.setVisible(open);
+    if (open) { this.shopOpen = false; this.shopPanel.setVisible(false); }
+  }
+
+  private exitGame() {
+    const onExit = this.registry.get("onExit") as (() => void) | undefined;
+    onExit?.();
+  }
+
   private text(x: number, y: number, str: string, size: number, color: string, style = "normal") {
     return this.add.text(x, y, str, { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: style });
   }
@@ -138,6 +170,7 @@ export class HudScene extends Phaser.Scene {
     this.hint.setPosition(16, height - 14);
     this.shopPanel.setPosition(width / 2 - 260, height / 2 - 210);
     this.lobbyPanel.setPosition(width / 2 - 250, height / 2 - 160);
+    this.pausePanel.setPosition(width / 2 - 180, height / 2 - 95);
   }
 
   // ------------------------------------------------------------------ bucle

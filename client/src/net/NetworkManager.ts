@@ -8,7 +8,7 @@ import type {
 const SERVER_URL =
   new URLSearchParams(location.search).get("server") ??
   (import.meta.env.VITE_SERVER_URL as string | undefined) ??
-  "ws://localhost:2567";
+  `ws://${location.hostname}:2567`; // mismo host que sirve la página (localhost o tu IP en la LAN)
 
 /** Forma del estado tal y como lo ve el cliente (espejo de GameState del servidor). */
 export interface GameStateView {
@@ -65,6 +65,10 @@ export class NetworkManager {
 
   startGame() {
     this.room.send("start");
+  }
+
+  async leave() {
+    try { await this.room.leave(); } catch { /* ya desconectado */ }
   }
 
   get state(): GameStateView {

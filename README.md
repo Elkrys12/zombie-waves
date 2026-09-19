@@ -62,6 +62,7 @@ En la sala de espera el anfitrión pulsa **ENTER** para empezar. Para probar el 
 | Empezar partida (anfitrión, en el lobby) | ENTER |
 | Abrir tienda | B |
 | Silenciar sonido | M |
+| Menú de pausa / salir al menú principal | ESC (y Q para salir) |
 
 El minimapa (abajo a la derecha) muestra el mapa completo, tus compañeros, los zombies y los puntos por donde entran (círculos rojos).
 | Comprar | 1-4 armas · 5-9 mejoras (con la tienda abierta) |

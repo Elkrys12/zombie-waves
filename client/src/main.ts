@@ -74,7 +74,7 @@ function describeError(err: unknown): string {
 }
 
 function startGame(net: NetworkManager) {
-  new Phaser.Game({
+  const game = new Phaser.Game({
     // ?renderer=canvas (pruebas): fuerza Canvas 2D, útil en navegadores headless sin WebGL
     type: params.get("renderer") === "canvas" ? Phaser.CANVAS : Phaser.AUTO,
     parent: "game",
@@ -88,7 +88,17 @@ function startGame(net: NetworkManager) {
     scene: [GameScene, HudScene],
     callbacks: {
       // La conexión ya está abierta: la dejamos en el registry antes de que arranquen las escenas
-      preBoot: (game) => game.registry.set("net", net),
+      preBoot: (g) => {
+        g.registry.set("net", net);
+        // Salir de la partida: cerrar la conexión, destruir el juego y volver al menú
+        g.registry.set("onExit", async () => {
+          await net.leave();
+          game.destroy(true);
+          menu.classList.remove("hidden");
+          buttons.forEach((b) => (b.disabled = false));
+          history.replaceState(null, "", location.pathname); // limpia ?sala=... y ?auto=
+        });
+      },
     },
   });
 }

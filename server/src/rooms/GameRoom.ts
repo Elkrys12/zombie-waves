@@ -8,6 +8,7 @@ import {
   WAVE_COUNTDOWN, FIRST_WAVE_COUNTDOWN, GAME_OVER_DELAY, BULLET_RADIUS,
   ROOM_CODE_LENGTH, ROOM_CODE_ALPHABET, MAX_PLAYERS,
   ZOMBIE_SPAWNS, PLAYER_SPAWN, resolveCircleCollisions, pointBlocked,
+  cellOf, cellCenter, distanceField, bestNeighbor, hasLineOfSight, UNREACHABLE,
   type InputMessage, type BuyUpgradeMessage, type BuyWeaponMessage, type JoinOptions, type CreateRoomOptions,
   type WeaponId, type UpgradeId, type ZombieType,
 } from "@zombie-waves/shared";
@@ -39,6 +40,8 @@ export class GameRoom extends Room<{ state: GameState }> {
   private bulletData = new Map<string, BulletData>();
   private zombieData = new Map<string, ZombieData>();
   private spawnQueue: ZombieType[] = [];
+  private navFields = new Map<string, { cell: number; field: Uint16Array }>();
+  private navTimer = 0;
   private spawnTimer = 0;
   private nextId = 1;
 
@@ -388,36 +391,84 @@ export class GameRoom extends Room<{ state: GameState }> {
     this.zombieData.delete(id);
   }
 
+  /** Recalcula (con límite de frecuencia) el campo de distancias de cada jugador vivo. */
+  private updateNavFields(dt: number, alivePlayers: { id: string; p: Player }[]) {
+    this.navTimer -= dt;
+    const due = this.navTimer <= 0;
+    if (due) this.navTimer = 0.2;
+
+    const alive = new Set(alivePlayers.map((a) => a.id));
+    for (const id of this.navFields.keys()) if (!alive.has(id)) this.navFields.delete(id);
+
+    for (const { id, p } of alivePlayers) {
+      const cell = cellOf(p.x, p.y);
+      const nav = this.navFields.get(id);
+      if (!nav || (due && nav.cell !== cell)) {
+        this.navFields.set(id, { cell, field: distanceField(p.x, p.y) });
+      }
+    }
+  }
+
+  /**
+   * Dirección de avance de un zombie hacia su objetivo: en línea recta si no hay nada en medio,
+   * o siguiendo el campo de distancias (rodeando muros y edificios) si lo hay.
+   */
+  private steer(zombie: Zombie, target: Player, field: Uint16Array | undefined): number {
+    if (!field || hasLineOfSight(zombie.x, zombie.y, target.x, target.y)) {
+      return Math.atan2(target.y - zombie.y, target.x - zombie.x);
+    }
+    // Sigue el gradiente varias celdas y apunta a la más lejana que vea directamente
+    let cell = cellOf(zombie.x, zombie.y);
+    let aim = cellCenter(cell);
+    for (let i = 0; i < 4; i++) {
+      const next = bestNeighbor(field, cell);
+      if (next < 0) break;
+      const center = cellCenter(next);
+      if (i > 0 && !hasLineOfSight(zombie.x, zombie.y, center.x, center.y)) break;
+      aim = center;
+      cell = next;
+    }
+    return Math.atan2(aim.y - zombie.y, aim.x - zombie.x);
+  }
+
   private updateZombies(dt: number) {
-    const alivePlayers: Player[] = [];
-    this.state.players.forEach((p) => { if (p.alive) alivePlayers.push(p); });
+    const alivePlayers: { id: string; p: Player }[] = [];
+    this.state.players.forEach((p, id) => { if (p.alive) alivePlayers.push({ id, p }); });
     if (alivePlayers.length === 0) return;
+
+    this.updateNavFields(dt, alivePlayers);
 
     this.state.zombies.forEach((zombie: Zombie, id: string) => {
       const config = ZOMBIES[zombie.type as ZombieType];
       const data = this.zombieData.get(id)!;
       data.attackTimer = Math.max(0, data.attackTimer - dt);
 
-      // Perseguir al jugador vivo más cercano
-      let target = alivePlayers[0];
-      let best = Infinity;
-      for (const p of alivePlayers) {
-        const d = Math.hypot(p.x - zombie.x, p.y - zombie.y);
-        if (d < best) { best = d; target = p; }
+      // Objetivo: el jugador más cercano *por camino* (no en línea recta)
+      const zCell = cellOf(zombie.x, zombie.y);
+      let target = alivePlayers[0].p;
+      let targetField: Uint16Array | undefined;
+      let bestCost = Infinity;
+      for (const { id: pid, p } of alivePlayers) {
+        const nav = this.navFields.get(pid);
+        const pathCost = nav ? nav.field[zCell] : UNREACHABLE;
+        // Sin camino (celda bloqueada o recinto cerrado): usa la distancia euclídea como respaldo
+        const cost = pathCost < UNREACHABLE ? pathCost : 100000 + Math.hypot(p.x - zombie.x, p.y - zombie.y);
+        if (cost < bestCost) { bestCost = cost; target = p; targetField = pathCost < UNREACHABLE ? nav?.field : undefined; }
       }
 
+      const distToTarget = Math.hypot(target.x - zombie.x, target.y - zombie.y);
       const reach = config.radius + PLAYER_RADIUS;
-      if (best > reach) {
-        let dir = Math.atan2(target.y - zombie.y, target.x - zombie.x);
+      if (distToTarget > reach) {
+        let dir = this.steer(zombie, target, targetField);
 
-        // Si lleva un rato sin avanzar (esquina de un edificio), rodea durante un momento
+        // Respaldo por si aun así se queda clavado: pequeño desvío lateral
         if (!Number.isNaN(data.detour)) {
           dir = data.detour;
           data.detourTimer -= dt;
           if (data.detourTimer <= 0) data.detour = NaN;
         }
 
-        const step = Math.min(config.speed * dt, best - reach);
+        const step = Math.min(config.speed * dt, distToTarget - reach);
         const before = { x: zombie.x, y: zombie.y };
         const pos = resolveCircleCollisions(
           Math.max(config.radius, Math.min(MAP_WIDTH - config.radius, zombie.x + Math.cos(dir) * step)),
@@ -430,10 +481,10 @@ export class GameRoom extends Room<{ state: GameState }> {
         const moved = Math.hypot(zombie.x - before.x, zombie.y - before.y);
         if (moved < step * 0.3 && Number.isNaN(data.detour)) {
           data.stuckTimer += dt;
-          if (data.stuckTimer > 0.4) {
+          if (data.stuckTimer > 0.6) {
             data.stuckTimer = 0;
-            data.detour = dir + (Math.random() < 0.5 ? 1 : -1) * (Math.PI / 2 + Math.random() * 0.6);
-            data.detourTimer = 0.8 + Math.random() * 0.8;
+            data.detour = dir + (Math.random() < 0.5 ? 1 : -1) * (Math.PI / 2);
+            data.detourTimer = 0.4;
           }
         } else if (moved >= step * 0.3) {
           data.stuckTimer = 0;

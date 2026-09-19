@@ -5,6 +5,7 @@
 
 // ---- Mapa y física ----
 export * from "./map.js";
+export * from "./nav.js";
 export const TICK_RATE = 20; // simulaciones por segundo en el servidor
 
 // ---- Jugador ----
