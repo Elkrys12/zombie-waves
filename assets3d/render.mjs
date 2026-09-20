@@ -10,7 +10,12 @@ import path from "node:path";
 
 const CHARACTERS = {
   // nombre: { model, yaw (grados para mirar a +X), actions (opcional), anims (carpeta Mixamo, opcional) }
-  proto: { model: "assets3d/models/proto.glb", yaw: 90, actions: "idle,walk,sprint,holding-right,holding-right-shoot,holding-both,holding-both-shoot,die" },
+  proto: {
+    model: "assets3d/models/proto.glb", yaw: 90, extras: "blocky",
+    actions: "idle,walk,sprint,holding-right,holding-right-shoot,holding-both,holding-both-shoot,die",
+    // Capas para personalización: nombre=objetos[:white]. Las ":white" se tintan en el juego.
+    layers: "pants=leg-left,leg-right:white;shirt=torso:white;skin=head,arm-left,arm-right:white;hair=hair:white;hat_cap=hat_cap,hat_cap_brim:white;glasses=glasses,glasses_l,glasses_r",
+  },
 };
 
 const candidates = [process.env.BLENDER, "C:/Users/yarie/tools/blender-5.2.2-windows-x64/blender.exe", "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe", "blender"].filter(Boolean);
@@ -26,6 +31,8 @@ for (const name of names) {
   const args = ["-b", "--python", "tools/blender/render_sprites.py", "--", "--model", path.resolve(c.model), "--out", out, "--yaw", String(c.yaw ?? 0), "--step", "2"];
   if (c.actions) args.push("--actions", c.actions);
   if (c.anims) args.push("--anims", path.resolve(c.anims));
+  if (c.layers) args.push("--layers", c.layers);
+  if (c.extras) args.push("--extras", c.extras);
   console.log(`== ${name}`);
   execFileSync(blender, args, { stdio: ["ignore", "inherit", "inherit"] });
   execFileSync("node", ["tools/pack-sheet.mjs", out, name, "--frame", "128"], { stdio: "inherit" });

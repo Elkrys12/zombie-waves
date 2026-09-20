@@ -75,3 +75,21 @@ En `client/src/scenes/BootScene.ts`:
 
 El juego elige la animación por estado (`die`, `holding-*-shoot` al disparar, `walk` al moverse,
 `holding-right`/`holding-both` según el arma, `idle`). Los nombres de acción anteriores son los que espera.
+
+## Personalización (capas)
+
+Para que el jugador pueda elegir colores y accesorios, el personaje se renderiza **por capas**: cada
+capa es un grupo de objetos del modelo que se renderiza solo, y las marcadas `:white` se renderizan en
+blanco para tintarlas en el juego. Ejemplo (prototipo):
+
+```js
+layers: "pants=leg-left,leg-right:white;shirt=torso:white;skin=head,arm-left,arm-right:white;hair=hair:white;hat_cap=hat_cap,hat_cap_brim:white;glasses=glasses,glasses_l,glasses_r",
+```
+
+Nombres que entiende el juego: `skin`, `shirt`, `pants`, `hair` (tintables), `hat_<nombre>` (visible
+si el jugador eligió esa gorra; los nombres válidos están en `HATS` de `shared`), `glasses` o
+`glasses_<nombre>`. El orden de la lista es el orden de dibujo (de abajo arriba).
+
+En tus modelos de Blender basta con nombrar los objetos por pieza (`torso`, `leg_left`, `hat_cap`…) y
+listar las capas en `assets3d/render.mjs`. Para añadir una gorra nueva: objeto `hat_beanie` en el
+modelo, capa `hat_beanie=hat_beanie:white` y el nombre `"beanie"` en `HATS`.

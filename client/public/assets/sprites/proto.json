@@ -45,5 +45,31 @@
       "end": 43,
       "loop": false
     }
-  }
+  },
+  "layers": [
+    {
+      "name": "pants",
+      "tintable": true
+    },
+    {
+      "name": "shirt",
+      "tintable": true
+    },
+    {
+      "name": "skin",
+      "tintable": true
+    },
+    {
+      "name": "hair",
+      "tintable": true
+    },
+    {
+      "name": "hat_cap",
+      "tintable": true
+    },
+    {
+      "name": "glasses",
+      "tintable": false
+    }
+  ]
 }

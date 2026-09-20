@@ -1,8 +1,19 @@
 import { Client, getStateCallbacks, type Room } from "@colyseus/sdk";
-import type {
-  InputMessage, UpgradeId, WeaponId, JoinOptions, CreateRoomOptions,
-  PlayerState, ZombieState, BulletState, WavePhase,
+import {
+  sanitizeAppearance,
+  type Appearance, type InputMessage, type UpgradeId, type WeaponId, type JoinOptions, type CreateRoomOptions,
+  type PlayerState, type ZombieState, type BulletState, type WavePhase,
 } from "@zombie-waves/shared";
+
+const APPEARANCE_KEY = "zw-appearance";
+
+/** Apariencia guardada en este navegador (se manda al entrar y se actualiza al personalizar). */
+export function loadAppearance(): Appearance {
+  try { return sanitizeAppearance(JSON.parse(localStorage.getItem(APPEARANCE_KEY) ?? "{}")); } catch { return sanitizeAppearance(undefined); }
+}
+export function saveAppearance(a: Appearance) {
+  try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(a)); } catch { /* sin almacenamiento */ }
+}
 
 // Prioridad: ?server=wss://... en la URL > variable de build VITE_SERVER_URL > servidor local
 const SERVER_URL =
@@ -33,21 +44,21 @@ export class NetworkManager {
 
   /** Partida rápida: entra en una sala pública con hueco o crea una nueva. */
   async quickPlay(name: string) {
-    const options: JoinOptions = { name };
+    const options: JoinOptions = { name, appearance: loadAppearance() };
     this.room = await this.client.joinOrCreate<GameStateView>("game", options);
     return this.waitForState();
   }
 
   /** Crea una sala privada a la que solo se entra con el código. */
   async createPrivate(name: string) {
-    const options: CreateRoomOptions = { name, private: true };
+    const options: CreateRoomOptions = { name, private: true, appearance: loadAppearance() };
     this.room = await this.client.create<GameStateView>("game", options);
     return this.waitForState();
   }
 
   /** Entra en la sala de un amigo por su código (el código es el roomId). */
   async joinByCode(code: string, name: string) {
-    const options: JoinOptions = { name };
+    const options: JoinOptions = { name, appearance: loadAppearance() };
     this.room = await this.client.joinById<GameStateView>(code.toUpperCase(), options);
     return this.waitForState();
   }
@@ -65,6 +76,11 @@ export class NetworkManager {
 
   startGame() {
     this.room.send("start");
+  }
+
+  customize(a: Appearance) {
+    saveAppearance(a);
+    this.room.send("customize", a);
   }
 
   async leave() {

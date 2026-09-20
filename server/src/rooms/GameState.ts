@@ -13,6 +13,14 @@ export const Player = schema({
   alive: t.boolean().default(true),
   kills: t.number().default(0),
 
+  // Apariencia (ver Appearance en shared)
+  skin: t.uint8().default(0),
+  shirt: t.uint8().default(1),
+  pants: t.uint8().default(6),
+  hair: t.uint8().default(0),
+  hat: t.string().default("none"),
+  glasses: t.string().default("none"),
+
   // Niveles de mejoras
   vest: t.number().default(0),
   speed: t.number().default(0),

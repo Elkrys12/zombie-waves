@@ -147,7 +147,7 @@ node tools/process-art.mjs zombie_walker player_1   # solo algunos
 - [x] Zombies con IA básica y oleadas (walker, runner, tank)
 - [x] Sistema de vida, muerte y reaparición
 - [x] Dinero y tienda de mejoras (armas, chaleco, velocidad, daño, cadencia, vida)
-- [x] Lobby: crear sala privada, unirse por código o enlace, anfitrión inicia
+- [x] Lobby: crear sala privada, unirse por código o enlace, anfitrión inicia, personalización del personaje (piel, camiseta, pantalón, pelo, gorra, gafas)
 - [x] Sprites procedurales, animaciones, efectos y sonido sintetizado (M para silenciar)
 - [x] HUD (vida, oleada, dinero, arma, marcador)
 - [x] Despliegue: cliente en GitHub Pages (automático) + servidor en Render (Dockerfile + blueprint)

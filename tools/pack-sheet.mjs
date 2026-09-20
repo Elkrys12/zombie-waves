@@ -75,28 +75,43 @@ function resize(img, nw, nh) {
 }
 
 // ---- empaquetado ----
-const meta = JSON.parse(fs.readFileSync(path.join(srcDir, "meta.json"), "utf8"));
-const actions = Object.keys(meta.actions);
-const frames = [];
-const anims = {};
-for (const action of actions) {
-  const start = frames.length;
-  for (let i = 1; i <= meta.actions[action].frames; i++) frames.push(path.join(srcDir, `${action}_${String(i).padStart(4, "0")}.png`));
-  anims[action] = { start, end: frames.length - 1, loop: meta.actions[action].loop !== false };
+/** Empaqueta una carpeta de frames en una hoja; devuelve la info de animaciones. */
+function packFolder(dir, outName) {
+  const meta = JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8"));
+  const frames = [];
+  const anims = {};
+  for (const action of Object.keys(meta.actions)) {
+    const start = frames.length;
+    for (let i = 1; i <= meta.actions[action].frames; i++) frames.push(path.join(dir, `${action}_${String(i).padStart(4, "0")}.png`));
+    anims[action] = { start, end: frames.length - 1, loop: meta.actions[action].loop !== false };
+  }
+  const cols = Math.ceil(Math.sqrt(frames.length));
+  const rows = Math.ceil(frames.length / cols);
+  const sheet = { w: cols * frameSize, h: rows * frameSize, px: new Uint8Array(cols * rows * frameSize * frameSize * 4) };
+  frames.forEach((file, i) => {
+    const img = resize(decodePng(fs.readFileSync(file)), frameSize, frameSize);
+    const ox = (i % cols) * frameSize, oy = Math.floor(i / cols) * frameSize;
+    for (let y = 0; y < frameSize; y++) sheet.px.set(img.px.subarray(y * frameSize * 4, (y + 1) * frameSize * 4), ((oy + y) * sheet.w + ox) * 4);
+  });
+  fs.mkdirSync(OUT, { recursive: true });
+  fs.writeFileSync(path.join(OUT, `${outName}.png`), encodePng(sheet));
+  console.log(`  ${outName}.png: ${frames.length} frames en ${cols}x${rows} (${sheet.w}x${sheet.h})`);
+  return { meta, anims, cols };
 }
-const cols = Math.ceil(Math.sqrt(frames.length));
-const rows = Math.ceil(frames.length / cols);
-const sheet = { w: cols * frameSize, h: rows * frameSize, px: new Uint8Array(cols * rows * frameSize * frameSize * 4) };
-frames.forEach((file, i) => {
-  const img = resize(decodePng(fs.readFileSync(file)), frameSize, frameSize);
-  const ox = (i % cols) * frameSize, oy = Math.floor(i / cols) * frameSize;
-  for (let y = 0; y < frameSize; y++) sheet.px.set(img.px.subarray(y * frameSize * 4, (y + 1) * frameSize * 4), ((oy + y) * sheet.w + ox) * 4);
-});
-fs.mkdirSync(OUT, { recursive: true });
-fs.writeFileSync(path.join(OUT, `${name}.png`), encodePng(sheet));
+
+const layersFile = path.join(srcDir, "layers.json");
+let info;
+let layers = null;
+if (fs.existsSync(layersFile)) {
+  // Personaje por capas (personalizable): una hoja por capa, mismas animaciones en todas
+  layers = JSON.parse(fs.readFileSync(layersFile, "utf8"));
+  for (const l of layers) info = packFolder(path.join(srcDir, l.name), `${name}_${l.name}`);
+} else {
+  info = packFolder(srcDir, name);
+}
 fs.writeFileSync(path.join(OUT, `${name}.json`), JSON.stringify({
-  frameWidth: frameSize, frameHeight: frameSize, columns: cols,
-  ppm: meta.ppm * (frameSize / meta.size), fps: meta.fps, anims,
+  frameWidth: frameSize, frameHeight: frameSize, columns: info.cols,
+  ppm: info.meta.ppm * (frameSize / info.meta.size), fps: info.meta.fps, anims: info.anims,
+  layers: layers ?? undefined,
 }, null, 2));
-console.log(`${name}: ${frames.length} frames en ${cols}x${rows} (${sheet.w}x${sheet.h}) -> ${path.join(OUT, name)}.png/.json`);
-console.log("  anims:", Object.entries(anims).map(([k, v]) => `${k}[${v.start}-${v.end}]`).join(" "));
+console.log(`${name}.json listo · anims: ${Object.entries(info.anims).map(([k, v]) => `${k}[${v.start}-${v.end}]`).join(" ")}`);

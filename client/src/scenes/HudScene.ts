@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { NetworkManager } from "../net/NetworkManager";
 import type { SoundManager } from "../audio/SoundManager";
 import { Minimap } from "../ui/Minimap";
+import { CustomizePanel } from "../ui/CustomizePanel";
 import {
   WEAPONS, WEAPON_IDS, UPGRADES, UPGRADE_IDS, upgradeCost, MAX_PLAYERS,
   type WeaponId, type UpgradeId,
@@ -54,6 +55,7 @@ export class HudScene extends Phaser.Scene {
   private bigCountdown!: Phaser.GameObjects.Text;
   private lastCountdownShown = -1;
   private lobbyPanel!: Phaser.GameObjects.Container;
+  private customize!: CustomizePanel;
   private lobbyText!: Phaser.GameObjects.Text;
   private pausePanel!: Phaser.GameObjects.Container;
   private pauseOpen = false;
@@ -128,6 +130,10 @@ export class HudScene extends Phaser.Scene {
     this.lobbyPanel = this.panel(0, 0, 500, 320).setVisible(false);
     this.lobbyText = this.text(250, 160, "", 16, C.text).setOrigin(0.5).setAlign("center").setLineSpacing(6);
     this.lobbyPanel.add(this.lobbyText);
+
+    // ---- Personalización del personaje (visible en el lobby)
+    this.customize = new CustomizePanel(this, this.net);
+    this.customize.setVisible(false);
 
     // ---- Menú de pausa (ESC)
     this.pausePanel = this.panel(0, 0, 360, 190).setVisible(false).setDepth(200);
@@ -272,7 +278,8 @@ export class HudScene extends Phaser.Scene {
     this.shopPanel.setPosition(width / 2 - 320, height / 2 - 200);
     this.waveBanner.setPosition(width / 2, height / 2 - 140);
     this.bigCountdown.setPosition(width / 2, height / 2 - 140);
-    this.lobbyPanel.setPosition(width / 2 - 250, height / 2 - 160);
+    this.lobbyPanel.setPosition(width / 2 - 250 + 120, height / 2 - 160);
+    this.customize.setPosition(16, Math.max(130, height / 2 - 235));
     this.pausePanel.setPosition(width / 2 - 180, height / 2 - 95);
   }
 
@@ -299,6 +306,7 @@ export class HudScene extends Phaser.Scene {
 
     const inLobby = state.phase === "lobby";
     this.lobbyPanel.setVisible(inLobby);
+    this.customize.setVisible(inLobby);
     if (inLobby) this.renderLobby();
 
     if (inLobby) {

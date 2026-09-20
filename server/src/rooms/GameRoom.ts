@@ -9,6 +9,7 @@ import {
   ROOM_CODE_LENGTH, ROOM_CODE_ALPHABET, MAX_PLAYERS,
   ZOMBIE_SPAWNS, PLAYER_SPAWN, resolveCircleCollisions, pointBlocked,
   cellOf, cellCenter, distanceField, bestNeighbor, hasLineOfSight, UNREACHABLE,
+  sanitizeAppearance, type Appearance,
   type InputMessage, type BuyUpgradeMessage, type BuyWeaponMessage, type JoinOptions, type CreateRoomOptions,
   type WeaponId, type UpgradeId, type ZombieType,
 } from "@zombie-waves/shared";
@@ -66,6 +67,11 @@ export class GameRoom extends Room<{ state: GameState }> {
       this.startCountdown(FIRST_WAVE_COUNTDOWN);
     });
 
+    this.onMessage("customize", (client, msg: Partial<Appearance>) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) this.applyAppearance(player, sanitizeAppearance(msg));
+    });
+
     this.onMessage("buy_upgrade", (client, msg: BuyUpgradeMessage) => {
       const player = this.state.players.get(client.sessionId);
       if (player) this.buyUpgrade(player, msg.upgrade);
@@ -91,6 +97,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     const player = new Player();
     player.name = (options.name ?? "").trim().slice(0, 12) || `Jugador ${this.state.players.size + 1}`;
     this.placeAtSpawn(player);
+    this.applyAppearance(player, sanitizeAppearance(options.appearance));
     // Si entra en mitad de una oleada, espera muerto a la siguiente para no aparecer rodeado
     player.alive = this.state.phase !== "active";
     if (!player.alive) player.hp = 0;
@@ -110,6 +117,15 @@ export class GameRoom extends Room<{ state: GameState }> {
       const next = this.state.players.keys().next();
       this.state.hostId = next.done ? "" : next.value;
     }
+  }
+
+  private applyAppearance(player: Player, a: Appearance) {
+    player.skin = a.skin;
+    player.shirt = a.shirt;
+    player.pants = a.pants;
+    player.hair = a.hair;
+    player.hat = a.hat;
+    player.glasses = a.glasses;
   }
 
   /** Coloca al jugador en un punto libre alrededor de la plaza. */

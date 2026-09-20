@@ -15,6 +15,10 @@ Uso (modo consola de Blender):
   --outline grosor del contorno negro (Freestyle) en píxeles
   --anims   carpeta con un FBX por animación (flujo Mixamo: "sin piel"); cada archivo se convierte
             en una acción con el nombre del archivo (walk.fbx -> walk) aplicada a la armadura del modelo
+  --layers  render por capas para personalización: "capa=obj1,obj2[:white];capa2=..."; cada capa se
+            renderiza sola (el resto oculto) en <out>/<capa>/. Con ":white" el material pasa a blanco
+            para poder tintarla en el juego (piel, camiseta, pantalón, pelo).
+  --extras  "blocky": añade pelo, gorra y gafas de primitivas al modelo (para el prototipo de Kenney)
 
 Salida: <out>/<accion>_0001.png ... y <out>/meta.json con frames por acción, fps y escala.
 """
@@ -39,6 +43,15 @@ def parse_args():
             opts[k] = float(v)
         elif k in ("size", "step", "fps"):
             opts[k] = int(v)
+        elif k == "layers":
+            opts["layers"] = []
+            for part in v.split(";"):
+                if not part.strip():
+                    continue
+                lname, rest = part.split("=", 1)
+                white = rest.endswith(":white")
+                objs = [o.strip() for o in rest.replace(":white", "").split(",") if o.strip()]
+                opts["layers"].append({"name": lname.strip(), "objects": objs, "white": white})
         else:
             opts[k] = v
         i += 2
@@ -196,6 +209,58 @@ def setup_scene(opts):
     ls.linestyle.thickness = opts["outline"]
 
 
+def add_blocky_extras():
+    """Pelo, gorra y gafas hechos con primitivas y emparentados a la cabeza del personaje de Kenney."""
+    head = bpy.data.objects.get("head")
+    if head is None:
+        print("[extras] no hay objeto 'head'; se omiten los accesorios")
+        return
+    # Cabeza algo más pequeña para que desde arriba asomen hombros (camiseta) y pies (pantalón)
+    head.scale = tuple(head.scale[i] * f for i, f in enumerate((0.68, 0.68, 0.85)))
+    bpy.context.view_layer.update()
+    d = head.dimensions
+    hc = head.matrix_world.translation
+    top = hc.z + d.z / 2
+    front = hc.y - d.y / 2  # el modelo mira a -Y
+    hw = d.x / 2
+
+    def make(name, primitive, color, **kw):
+        primitive(**kw)
+        o = bpy.context.active_object
+        o.name = name
+        mat = bpy.data.materials.new(name)
+        mat.use_nodes = True
+        mat.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = color
+        o.data.materials.append(mat)
+        o.parent = head
+        o.matrix_parent_inverse = head.matrix_world.inverted()
+        return o
+
+    # Pelo: disco plano sobre la cabeza
+    make("hair", bpy.ops.mesh.primitive_cylinder_add, (1, 1, 1, 1), radius=hw * 0.92, depth=0.06, location=(hc.x, hc.y, top + 0.03))
+    # Gorra: copa + visera hacia delante
+    make("hat_cap", bpy.ops.mesh.primitive_cylinder_add, (1, 1, 1, 1), radius=hw * 1.08, depth=0.1, location=(hc.x, hc.y, top + 0.08))
+    make("hat_cap_brim", bpy.ops.mesh.primitive_cube_add, (1, 1, 1, 1), size=1, location=(hc.x, front - 0.16, top + 0.06), scale=(hw * 1.8, 0.32, 0.04))
+    # Gafas: montura frontal + patillas
+    make("glasses", bpy.ops.mesh.primitive_cube_add, (0.08, 0.08, 0.1, 1), size=1, location=(hc.x, front - 0.03, hc.z + 0.1), scale=(hw * 1.9, 0.06, 0.1))
+    make("glasses_l", bpy.ops.mesh.primitive_cube_add, (0.08, 0.08, 0.1, 1), size=1, location=(hc.x - hw - 0.02, front + hw * 0.5, hc.z + 0.1), scale=(0.04, hw * 1.1, 0.05))
+    make("glasses_r", bpy.ops.mesh.primitive_cube_add, (0.08, 0.08, 0.1, 1), size=1, location=(hc.x + hw + 0.02, front + hw * 0.5, hc.z + 0.1), scale=(0.04, hw * 1.1, 0.05))
+    print("[extras] pelo, gorra y gafas añadidos")
+
+
+def whiten_objects(names):
+    """Sustituye los materiales de esos objetos por blanco liso (base tintable en el juego)."""
+    white = bpy.data.materials.new("LayerWhite")
+    white.use_nodes = True
+    white.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (1, 1, 1, 1)
+    for n in names:
+        o = bpy.data.objects.get(n)
+        if o is None or o.type != "MESH":
+            continue
+        o.data.materials.clear()
+        o.data.materials.append(white)
+
+
 def toonify_materials():
     """Convierte cada material en sombreado plano por pasos (cel shading) conservando su color base."""
     for mat in bpy.data.materials:
@@ -278,12 +343,32 @@ def orient_model(yaw_deg):
 
 # ------------------------------------------------------------------ render
 
+def set_layer_visibility(layer):
+    """Deja visibles para el render solo los objetos de la capa (None = todos)."""
+    for o in bpy.data.objects:
+        if o.type != "MESH":
+            continue
+        o.hide_render = layer is not None and o.name not in layer["objects"]
+
+
 def render_all(opts):
+    layers = opts.get("layers")
+    if not layers:
+        render_pass(opts, opts["out"], None)
+        return
+    for layer in layers:
+        set_layer_visibility(layer)
+        render_pass(opts, os.path.join(opts["out"], layer["name"]), layer)
+    with open(os.path.join(opts["out"], "layers.json"), "w", encoding="utf-8") as fh:
+        json.dump([{"name": l["name"], "tintable": l["white"]} for l in layers], fh, indent=2)
+
+
+def render_pass(opts, out, layer):
     scene = bpy.context.scene
-    out = opts["out"]
     os.makedirs(out, exist_ok=True)
     names = opts["actions"] or available_actions()
     meta = {"size": opts["size"], "ppm": opts["ppm"], "fps": opts["fps"], "actions": {}}
+    tag = f" [{layer['name']}]" if layer else ""
 
     for name in names:
         rng = activate_action(name)
@@ -295,7 +380,7 @@ def render_all(opts):
         # Evitar frame duplicado al cerrar el ciclo (el último suele igualar al primero)
         if len(frames) > 2 and end - start >= 4 and (end - start) % opts["step"] == 0:
             frames = frames[:-1]
-        print(f"[render] {name}: frames {start}-{end} -> {len(frames)} imágenes")
+        print(f"[render]{tag} {name}: frames {start}-{end} -> {len(frames)} imágenes")
         root = root_object()
         for i, f in enumerate(frames):
             scene.frame_set(f)
@@ -317,6 +402,11 @@ if __name__ == "__main__":
     load_model(opts["model"])
     if opts.get("anims"):
         import_anim_folder(opts["anims"])
+    if opts.get("extras") == "blocky":
+        add_blocky_extras()
+    for layer in opts.get("layers") or []:
+        if layer["white"]:
+            whiten_objects(layer["objects"])
     setup_scene(opts)
     toonify_materials()
     orient_model(opts["yaw"])

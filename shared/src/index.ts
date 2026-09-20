@@ -90,6 +90,38 @@ export const ZOMBIES: Record<ZombieType, ZombieConfig> = {
   tank: { hp: 300, speed: 50, damage: 30, reward: 50, radius: 26, hitRadius: 38, attackCooldown: 1.5 },
 };
 
+// ---- Apariencia del personaje (personalizable en el lobby) ----
+export const SKIN_TONES = [0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3a1e, 0xffdbac];
+export const CLOTH_COLORS = [0xd9532b, 0x2f80ed, 0x27ae60, 0xf2c94c, 0x9b51e0, 0xf2f2f2, 0x2d2d2d, 0x8d6e63, 0xff7eb6, 0x00bcd4, 0xff8c00, 0x556b2f];
+export const HAIR_COLORS = [0x2b1b0e, 0x5a3a1e, 0xd9a35a, 0xc0392b, 0x9e9e9e, 0x1a1a1a, 0xf5f5f5, 0x7e57c2];
+export const HATS = ["none", "cap"] as const;
+export const GLASSES = ["none", "glasses"] as const;
+
+export interface Appearance {
+  skin: number;   // índice en SKIN_TONES
+  shirt: number;  // índice en CLOTH_COLORS
+  pants: number;  // índice en CLOTH_COLORS
+  hair: number;   // índice en HAIR_COLORS
+  hat: string;    // HATS
+  glasses: string; // GLASSES
+}
+
+export const DEFAULT_APPEARANCE: Appearance = { skin: 0, shirt: 1, pants: 6, hair: 0, hat: "none", glasses: "none" };
+
+/** Normaliza lo que manda el cliente: índices dentro de rango y nombres válidos. */
+export function sanitizeAppearance(a: Partial<Appearance> | undefined): Appearance {
+  const idx = (v: unknown, n: number, d: number) => (Number.isInteger(v) && (v as number) >= 0 && (v as number) < n ? (v as number) : d);
+  const pick = (v: unknown, list: readonly string[], d: string) => (typeof v === "string" && list.includes(v) ? v : d);
+  return {
+    skin: idx(a?.skin, SKIN_TONES.length, DEFAULT_APPEARANCE.skin),
+    shirt: idx(a?.shirt, CLOTH_COLORS.length, DEFAULT_APPEARANCE.shirt),
+    pants: idx(a?.pants, CLOTH_COLORS.length, DEFAULT_APPEARANCE.pants),
+    hair: idx(a?.hair, HAIR_COLORS.length, DEFAULT_APPEARANCE.hair),
+    hat: pick(a?.hat, HATS, DEFAULT_APPEARANCE.hat),
+    glasses: pick(a?.glasses, GLASSES, DEFAULT_APPEARANCE.glasses),
+  };
+}
+
 // ---- Oleadas ----
 export const WAVE_COUNTDOWN = 15; // segundos entre oleadas (tiempo de tienda)
 export const FIRST_WAVE_COUNTDOWN = 8;
@@ -105,7 +137,7 @@ export const ROOM_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export const MAX_PLAYERS = 4;
 
 // ---- Forma del estado sincronizado (para tipar el cliente) ----
-export interface PlayerState {
+export interface PlayerState extends Appearance {
   name: string;
   x: number;
   y: number;
@@ -158,6 +190,7 @@ export interface BuyWeaponMessage {
 
 export interface JoinOptions {
   name?: string;
+  appearance?: Partial<Appearance>;
 }
 
 export interface CreateRoomOptions extends JoinOptions {

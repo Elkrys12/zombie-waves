@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { NetworkManager } from "../net/NetworkManager";
 import { SoundManager } from "../audio/SoundManager";
 import { PLAYER_LOOKS, ZOMBIE_SPRITE, WEAPON_SIZE, WORLD_PPM, type SheetMeta } from "./BootScene";
+import { CharacterFigure } from "../gfx/CharacterFigure";
 import { MapRenderer } from "../gfx/MapRenderer";
 import { Lighting, type LightSource } from "../gfx/Lighting";
 import { Effects } from "../gfx/Effects";
@@ -15,7 +16,7 @@ const MAX_DECALS = 60;
 
 interface PlayerView {
   root: Phaser.GameObjects.Container; // rota con el ángulo de apuntado
-  body: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
+  body: Phaser.GameObjects.Image | CharacterFigure;
   sheet?: string; // hoja animada (personaje 3D renderizado) o undefined si es imagen estática
   gun: Phaser.GameObjects.Image;
   name: Phaser.GameObjects.Text;
@@ -108,15 +109,19 @@ export class GameScene extends Phaser.Scene {
       const isMe = id === this.net.sessionId;
       // Sprite propio: la cabeza (pivote de giro) está a ~1/3 del ancho; el arma sobresale a la derecha
       const look = PLAYER_LOOKS[this.colorIndex++ % PLAYER_LOOKS.length];
-      let body: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
+      let body: Phaser.GameObjects.Image | CharacterFigure;
       let baseScale: number;
       if (look.sheet) {
-        // Personaje 3D renderizado: el frame está centrado en la raíz del modelo
+        // Personaje 3D renderizado por capas: el frame está centrado en la raíz del modelo
         const meta = this.cache.json.get(`${look.sheet}_meta`) as SheetMeta;
-        const sprite = this.add.sprite(0, 0, look.sheet, 0).setOrigin(0.5, 0.5);
-        sprite.play(`${look.sheet}/idle`);
-        body = sprite;
+        const figure = new CharacterFigure(this, look.sheet);
+        figure.setAppearance(player);
+        body = figure;
         baseScale = WORLD_PPM / meta.ppm;
+        // La apariencia puede cambiar en el lobby: se vuelve a aplicar al cambiar cualquier campo
+        for (const field of ["skin", "shirt", "pants", "hair", "hat", "glasses"] as const) {
+          $(player).listen(field, () => figure.setAppearance(player));
+        }
       } else {
         body = this.add.image(0, 0, look.image).setOrigin(0.3, 0.5);
         baseScale = (PLAYER_RADIUS * 3.4) / body.height;
@@ -124,7 +129,7 @@ export class GameScene extends Phaser.Scene {
       body.setScale(baseScale).setData("base", baseScale);
       // Arma como capa aparte, DEBAJO del cuerpo y alineada con el brazo derecho: la culata queda bajo
       // la mano (que se dibuja encima) y el cañón sobresale hacia delante
-      const handX = look.sheet ? 0.36 * WORLD_PPM : body.displayWidth * 0.5;
+      const handX = look.sheet ? 0.36 * WORLD_PPM : (body as Phaser.GameObjects.Image).displayWidth * 0.5;
       const gun = this.add.image(handX, GUN_SIDE_OFFSET, `weapon_${player.weapon}`).setOrigin(0.22, 0.5);
       gun.setScale(WEAPON_SIZE[player.weapon] / gun.height);
       const shadow = this.add.ellipse(2, 5, PLAYER_RADIUS * 3, PLAYER_RADIUS * 2.6, 0x000000, 0.35);
@@ -364,7 +369,7 @@ export class GameScene extends Phaser.Scene {
       view.root.setAlpha(player.alive ? 1 : 0.35);
 
       const base = view.body.getData("base") as number;
-      if (view.sheet && view.body instanceof Phaser.GameObjects.Sprite) {
+      if (view.sheet && view.body instanceof CharacterFigure) {
         // Personaje animado: elegir la animación según lo que hace
         const oneHand = player.weapon === "pistol";
         const shooting = time - ((view.root.getData("lastShot") as number | undefined) ?? -9999) < 220;
@@ -373,8 +378,7 @@ export class GameScene extends Phaser.Scene {
         else if (shooting) anim = oneHand ? "holding-right-shoot" : "holding-both-shoot";
         else if (view.moving) anim = "walk";
         else anim = oneHand ? "holding-right" : "holding-both";
-        const key = `${view.sheet}/${anim}`;
-        if (view.body.anims.currentAnim?.key !== key) view.body.play(key, true);
+        view.body.play(anim);
         view.body.setScale(base);
         // Con pistola el arma va en la mano derecha; con dos manos, centrada entre ambas
         view.gun.y = oneHand ? GUN_SIDE_OFFSET : 0;
