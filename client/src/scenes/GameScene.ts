@@ -6,7 +6,7 @@ import { MapRenderer } from "../gfx/MapRenderer";
 import { Lighting, type LightSource } from "../gfx/Lighting";
 import { Effects } from "../gfx/Effects";
 import {
-  MAP_WIDTH, MAP_HEIGHT, PLAYER_RADIUS, ZOMBIES, WEAPONS, pointBlocked,
+  MAP_WIDTH, MAP_HEIGHT, PLAYER_RADIUS, GUN_SIDE_OFFSET, ZOMBIES, WEAPONS, pointBlocked,
   type PlayerState, type ZombieState, type BulletState, type WeaponId, type WavePhase,
 } from "@zombie-waves/shared";
 
@@ -109,11 +109,12 @@ export class GameScene extends Phaser.Scene {
       const body = this.add.image(0, 0, PLAYER_SPRITES[this.colorIndex++ % PLAYER_SPRITES.length]).setOrigin(0.3, 0.5);
       const baseScale = (PLAYER_RADIUS * 3.4) / body.height;
       body.setScale(baseScale).setData("base", baseScale);
-      // Arma como capa aparte, apoyada en las manos (a la derecha de la cabeza)
-      const gun = this.add.image(body.displayWidth * 0.36, 1, `weapon_${player.weapon}`).setOrigin(0.32, 0.5);
+      // Arma como capa aparte, DEBAJO del cuerpo y alineada con el brazo derecho: la culata queda bajo
+      // la mano (que se dibuja encima) y el cañón sobresale hacia delante
+      const gun = this.add.image(body.displayWidth * 0.5, GUN_SIDE_OFFSET, `weapon_${player.weapon}`).setOrigin(0.22, 0.5);
       gun.setScale(WEAPON_SIZE[player.weapon] / gun.height);
       const shadow = this.add.ellipse(2, 5, PLAYER_RADIUS * 3, PLAYER_RADIUS * 2.6, 0x000000, 0.35);
-      const root = this.add.container(player.x, player.y, [shadow, body, gun]).setDepth(10);
+      const root = this.add.container(player.x, player.y, [shadow, gun, body]).setDepth(10);
       const name = this.add.text(0, 0, player.name, { fontSize: "12px", color: "#fff", fontFamily: "system-ui", stroke: "#000", strokeThickness: 3 })
         .setOrigin(0.5, 1).setDepth(12);
       const hpBg = this.add.rectangle(0, 0, 40, 5, 0x000000, 0.6).setDepth(12);
@@ -237,7 +238,8 @@ export class GameScene extends Phaser.Scene {
       const weapon = WEAPONS[owner.weapon as WeaponId];
       const kick = weapon.bulletsPerShot > 1 ? 9 : weapon.damage > 30 ? 7 : 4;
       this.fx.recoil(view.body, view.gun, kick);
-      this.fx.casing(view.root.x + Math.cos(owner.angle) * 10, view.root.y + Math.sin(owner.angle) * 10, owner.angle);
+      const side = owner.angle + Math.PI / 2;
+      this.fx.casing(view.root.x + Math.cos(owner.angle) * 26 + Math.cos(side) * GUN_SIDE_OFFSET, view.root.y + Math.sin(owner.angle) * 26 + Math.sin(side) * GUN_SIDE_OFFSET, owner.angle);
       if (bullet.ownerId === this.net.sessionId) this.cameras.main.shake(70, kick * 0.0006);
     }
   }

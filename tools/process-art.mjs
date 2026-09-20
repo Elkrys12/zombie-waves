@@ -29,12 +29,12 @@ const SPEC = {
   tree_big: { max: 256 }, tree_small: { max: 200 }, bush: { max: 128 }, fountain: { max: 256 },
   crate: { max: 128 }, barrel: { max: 128 }, sandbags: { max: 256 }, fence_white: { max: 320 },
   lamp_post: { max: 160, loose: true }, mailbox: { max: 128 }, hydrant: { max: 96 }, cone: { max: 96 },
-  rock: { max: 128, keepInner: true }, tires: { max: 128 }, // keepInner: no tocar huecos cerrados (relleno gris legítimo)
+  rock: { max: 128 }, tires: { max: 128, holes: true },
   blood_splat: { max: 160 }, muzzle_flash: { max: 128, loose: true }, bullet: { max: 96, loose: true },
   icon_heart: { max: 96 }, icon_money: { max: 96 }, icon_skull: { max: 96 }, icon_pistol: { max: 96 },
   icon_smg: { max: 96 }, icon_shotgun: { max: 96 }, icon_rifle: { max: 96 }, icon_vest: { max: 96 },
   icon_speed: { max: 96 }, icon_damage: { max: 96 }, icon_firerate: { max: 96 }, icon_hp: { max: 96 },
-  logo: { max: 900 },
+  logo: { max: 900, holes: true }, // holes: también quitar tablero en huecos cerrados (las "O")
   // texturas: sin quitar fondo, solo reducir
   ground_grass: { max: 512, texture: true }, ground_asphalt: { max: 512, texture: true },
   ground_concrete: { max: 512, texture: true }, ground_dirt: { max: 512, texture: true },
@@ -128,7 +128,7 @@ function isBgLike(px, o, loose) {
   return loose ? bright > 140 && max - min < 95 : bright > 90 && max - min < 30;
 }
 
-function removeCheckerboard(img, loose, keepInner = false) {
+function removeCheckerboard(img, loose, holes = false) {
   const { w, h, px } = img;
   const label = new Int32Array(w * h).fill(-1);
   const bg = new Uint8Array(w * h);
@@ -163,7 +163,9 @@ function removeCheckerboard(img, loose, keepInner = false) {
     for (const l of c.lums) { if (l > mean + 12) hi++; else if (l < mean - 12) lo++; }
     return hi > c.size * 0.15 && lo > c.size * 0.15;
   };
-  const remove = comps.map((c) => c.border || (!keepInner && isChecker(c)));
+  // Por defecto solo se quita lo que toca el borde: el sombreado plano de un sprite (metal, piel)
+  // también tiene "dos tonos" y se confundiría con tablero.
+  const remove = comps.map((c) => c.border || (holes && isChecker(c)));
   for (let i = 0; i < w * h; i++) if (label[i] !== -1 && remove[label[i]]) px[i * 4 + 3] = 0;
 
   // Borde suave: los píxeles claros pegados a zona eliminada se atenúan según su luminosidad
@@ -233,7 +235,7 @@ for (const name of names) {
   const spec = SPEC[name];
   let img = decodePng(fs.readFileSync(file));
   if (!spec.texture) {
-    removeCheckerboard(img, !!spec.loose, !!spec.keepInner);
+    removeCheckerboard(img, !!spec.loose, !!spec.holes);
     img = crop(img);
   }
   img = resize(img, spec.max);

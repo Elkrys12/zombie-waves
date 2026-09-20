@@ -12,6 +12,9 @@ export const TICK_RATE = 20; // simulaciones por segundo en el servidor
 export const PLAYER_BASE_SPEED = 200; // px/s
 export const PLAYER_BASE_HP = 100;
 export const PLAYER_RADIUS = 16;
+/** El arma va en la mano derecha: desplazamiento lateral (perpendicular al apuntado) del cañón. */
+export const GUN_SIDE_OFFSET = 14;
+export const GUN_FORWARD_OFFSET = 40;
 
 // ---- Armas ----
 export type WeaponId = "pistol" | "smg" | "shotgun" | "rifle";
