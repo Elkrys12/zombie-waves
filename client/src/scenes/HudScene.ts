@@ -8,7 +8,16 @@ import {
 } from "@zombie-waves/shared";
 
 const FONT = "system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+const DISPLAY_FONT = "Bangers, Impact, system-ui, sans-serif";
 const C = { panel: 0x0c0d14, border: 0x7ed957, text: "#f2f2f2", muted: "#9aa0a6", accent: "#7ed957", danger: "#ff6b6b", gold: "#ffd166" };
+
+interface ShopCard {
+  root: Phaser.GameObjects.Container;
+  bg: Phaser.GameObjects.Rectangle;
+  name: Phaser.GameObjects.Text;
+  info: Phaser.GameObjects.Text;
+  price: Phaser.GameObjects.Text;
+}
 
 /**
  * HUD superpuesto: vida, dinero, arma, oleada, marcador, minimapa, tienda (B) y lobby.
@@ -39,7 +48,11 @@ export class HudScene extends Phaser.Scene {
   private codeText!: Phaser.GameObjects.Text;
 
   private shopPanel!: Phaser.GameObjects.Container;
-  private shopText!: Phaser.GameObjects.Text;
+  private shopMoney!: Phaser.GameObjects.Text;
+  private shopCards: ShopCard[] = [];
+  private waveBanner!: Phaser.GameObjects.Text;
+  private bigCountdown!: Phaser.GameObjects.Text;
+  private lastCountdownShown = -1;
   private lobbyPanel!: Phaser.GameObjects.Container;
   private lobbyText!: Phaser.GameObjects.Text;
   private pausePanel!: Phaser.GameObjects.Container;
@@ -70,7 +83,7 @@ export class HudScene extends Phaser.Scene {
 
     // ---- Oleada (arriba centro)
     this.wavePanel = this.panel(0, 0, 360, 64);
-    this.waveText = this.text(180, 12, "", 24, C.text, "bold").setOrigin(0.5, 0);
+    this.waveText = this.add.text(180, 8, "", { fontFamily: DISPLAY_FONT, fontSize: "30px", color: C.text }).setOrigin(0.5, 0);
     this.waveSub = this.text(180, 42, "", 13, C.muted).setOrigin(0.5, 0);
     this.wavePanel.add([this.waveText, this.waveSub]);
 
@@ -83,19 +96,33 @@ export class HudScene extends Phaser.Scene {
     this.minimap = new Minimap(this, this.net);
     this.codeText = this.text(0, 0, "", 12, C.muted).setOrigin(1, 1);
 
+    // ---- Cartel de oleada (entra con golpe) y cuenta atrás grande
+    this.waveBanner = this.add.text(0, 0, "", { fontFamily: DISPLAY_FONT, fontSize: "72px", color: "#ff6b6b", stroke: "#000", strokeThickness: 8 })
+      .setOrigin(0.5).setAlpha(0).setDepth(150);
+    this.bigCountdown = this.add.text(0, 0, "", { fontFamily: DISPLAY_FONT, fontSize: "96px", color: "#ffd166", stroke: "#000", strokeThickness: 8 })
+      .setOrigin(0.5).setAlpha(0).setDepth(150);
+    this.net.callbacks(this.net.state).listen("phase", (phase: string, prev: string) => {
+      if (prev === undefined) return;
+      if (phase === "active") this.showBanner(`OLEADA ${this.net.state.wave}`, "#ff6b6b");
+      else if (phase === "countdown" && prev === "active") this.showBanner("¡OLEADA SUPERADA!", "#7ed957");
+      else if (phase === "gameover") this.showBanner("GAME OVER", "#ff6b6b");
+    });
+
     // ---- Aviso central y ayuda
     this.banner = this.text(0, 0, "", 34, C.danger, "bold").setOrigin(0.5).setAlign("center").setShadow(0, 3, "#000", 6);
     this.hint = this.text(0, 0, "B: tienda · M: sonido · ESC: menú", 12, C.muted).setOrigin(0, 1);
 
     // ---- Tienda
-    this.shopPanel = this.panel(0, 0, 560, 420).setVisible(false);
-    this.shopText = this.text(52, 14, "", 14, C.text).setLineSpacing(6).setFontFamily("Consolas, Menlo, monospace");
-    this.shopPanel.add(this.shopText);
-    // Iconos alineados con las filas del texto (línea = 14 px de fuente + 6 de interlineado)
-    const line = 20;
-    WEAPON_IDS.forEach((id, i) => this.shopPanel.add(this.icon(32, 14 + line * (3 + i) + 8, `icon_${id}`, 24)));
+    this.shopPanel = this.panel(0, 0, 640, 400).setVisible(false);
+    this.shopPanel.add(this.add.text(320, 14, "TIENDA", { fontFamily: DISPLAY_FONT, fontSize: "30px", color: C.accent }).setOrigin(0.5, 0));
+    this.shopMoney = this.text(320, 50, "", 14, C.gold, "bold").setOrigin(0.5, 0);
+    this.shopPanel.add(this.shopMoney);
+    this.shopPanel.add(this.text(20, 80, "ARMAS", 12, C.muted, "bold"));
+    this.shopPanel.add(this.text(20, 232, "MEJORAS", 12, C.muted, "bold"));
     const upgradeIcons: Record<UpgradeId, string> = { vest: "icon_vest", speed: "icon_speed", damage: "icon_damage", fire_rate: "icon_firerate", max_hp: "icon_hp" };
-    UPGRADE_IDS.forEach((id, i) => this.shopPanel.add(this.icon(32, 14 + line * (3 + WEAPON_IDS.length + 2 + i) + 8, upgradeIcons[id], 22)));
+    WEAPON_IDS.forEach((id, i) => this.shopCards.push(this.card(20 + i * 152, 98, 140, 122, i + 1, `icon_${id}`, () => this.tryBuy(i + 1))));
+    UPGRADE_IDS.forEach((id, i) => this.shopCards.push(this.card(20 + i * 121, 250, 110, 128, i + 5, upgradeIcons[id], () => this.tryBuy(i + 5))));
+    for (const c of this.shopCards) this.shopPanel.add(c.root);
 
     // ---- Lobby (sala de espera)
     this.lobbyPanel = this.panel(0, 0, 500, 320).setVisible(false);
@@ -104,7 +131,7 @@ export class HudScene extends Phaser.Scene {
 
     // ---- Menú de pausa (ESC)
     this.pausePanel = this.panel(0, 0, 360, 190).setVisible(false).setDepth(200);
-    this.pausePanel.add(this.text(180, 18, "MENÚ", 20, C.text, "bold").setOrigin(0.5, 0));
+    this.pausePanel.add(this.add.text(180, 14, "MENÚ", { fontFamily: DISPLAY_FONT, fontSize: "28px", color: C.accent }).setOrigin(0.5, 0));
     this.pausePanel.add(this.button(180, 70, 300, "Seguir jugando  (ESC)", () => this.togglePause(false)));
     this.pausePanel.add(this.button(180, 124, 300, "Salir al menú principal  (Q)", () => this.exitGame(), true));
 
@@ -131,6 +158,8 @@ export class HudScene extends Phaser.Scene {
 
     this.scale.on("resize", () => this.layout());
     this.layout();
+    // ?shop=1 (pruebas): abre la tienda al entrar
+    if (new URLSearchParams(location.search).get("shop")) { this.shopOpen = true; this.shopPanel.setVisible(true); }
   }
 
   // ------------------------------------------------------------------ helpers de UI
@@ -172,6 +201,61 @@ export class HudScene extends Phaser.Scene {
     return img;
   }
 
+  private showBanner(label: string, color: string) {
+    const b = this.waveBanner;
+    this.tweens.killTweensOf(b);
+    b.setText(label).setColor(color).setAlpha(1).setScale(3);
+    this.tweens.chain({
+      targets: b,
+      tweens: [
+        { scale: 1, duration: 260, ease: "Back.Out" },
+        { alpha: 0, delay: 1300, duration: 400 },
+      ],
+    });
+  }
+
+  /** Tarjeta de la tienda: icono, nombre, precio/nivel y tecla. Se actualiza en refreshCards. */
+  private card(x: number, y: number, w: number, h: number, key: number, iconKey: string, onClick: () => void): ShopCard {
+    const bg = this.add.rectangle(0, 0, w, h, 0x1a1c26, 0.95).setOrigin(0).setStrokeStyle(2, 0x3a3f4d);
+    const icon = this.icon(w / 2, 36, iconKey, 40);
+    const name = this.text(w / 2, 62, "", 13, C.text, "bold").setOrigin(0.5, 0);
+    const info = this.text(w / 2, 80, "", 11, C.muted).setOrigin(0.5, 0).setAlign("center").setWordWrapWidth(w - 12);
+    const price = this.text(w / 2, h - 22, "", 14, C.gold, "bold").setOrigin(0.5, 0);
+    const keyBadge = this.add.container(w - 14, 14, [
+      this.add.circle(0, 0, 10, 0x7ed957),
+      this.text(0, 0, String(key), 12, "#0b0b0f", "bold").setOrigin(0.5),
+    ]);
+    bg.setInteractive({ useHandCursor: true }).on("pointerdown", onClick)
+      .on("pointerover", () => bg.setStrokeStyle(2, 0x7ed957)).on("pointerout", () => bg.setStrokeStyle(2, 0x3a3f4d));
+    const root = this.add.container(x, y, [bg, icon, name, info, price, keyBadge]);
+    return { root, bg, name, info, price };
+  }
+
+  private refreshCards() {
+    const me = this.net.me!;
+    this.shopMoney.setText(`Dinero disponible: ${me.money}`);
+    WEAPON_IDS.forEach((id, i) => {
+      const c = this.shopCards[i];
+      const w = WEAPONS[id];
+      const owned = me.weapon === id;
+      c.name.setText(w.name);
+      c.info.setText(`daño ${w.damage} · ${w.fireRate}/s${w.bulletsPerShot > 1 ? ` · x${w.bulletsPerShot}` : ""}`);
+      c.price.setText(owned ? "EQUIPADA" : `${w.cost}`).setColor(owned ? C.accent : me.money >= w.cost ? C.gold : C.danger);
+      c.root.setAlpha(owned || me.money >= w.cost ? 1 : 0.55);
+    });
+    UPGRADE_IDS.forEach((id, i) => {
+      const c = this.shopCards[WEAPON_IDS.length + i];
+      const u = UPGRADES[id];
+      const level = me[id];
+      const maxed = level >= u.maxLevel;
+      const cost = upgradeCost(id, level);
+      c.name.setText(u.name);
+      c.info.setText(`${u.description}\nnivel ${level}/${u.maxLevel}`);
+      c.price.setText(maxed ? "MÁXIMO" : `${cost}`).setColor(maxed ? C.accent : me.money >= cost ? C.gold : C.danger);
+      c.root.setAlpha(maxed || me.money >= cost ? 1 : 0.55);
+    });
+  }
+
   private text(x: number, y: number, str: string, size: number, color: string, style = "normal") {
     return this.add.text(x, y, str, { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: style });
   }
@@ -185,7 +269,9 @@ export class HudScene extends Phaser.Scene {
     this.codeText.setPosition(width - 16, height - 20 - this.minimap.size);
     this.banner.setPosition(width / 2, height / 2 - 80);
     this.hint.setPosition(16, height - 14);
-    this.shopPanel.setPosition(width / 2 - 280, height / 2 - 210);
+    this.shopPanel.setPosition(width / 2 - 320, height / 2 - 200);
+    this.waveBanner.setPosition(width / 2, height / 2 - 140);
+    this.bigCountdown.setPosition(width / 2, height / 2 - 140);
     this.lobbyPanel.setPosition(width / 2 - 250, height / 2 - 160);
     this.pausePanel.setPosition(width / 2 - 180, height / 2 - 95);
   }
@@ -237,7 +323,17 @@ export class HudScene extends Phaser.Scene {
     else if (!me.alive) this.banner.setText("Has muerto\nReaparecerás en la siguiente oleada");
     else this.banner.setText("");
 
-    if (this.shopOpen) this.renderShop();
+    if (this.shopOpen) this.refreshCards();
+
+    // Cuenta atrás grande en los últimos 3 segundos antes de una oleada
+    const secs = Math.ceil(state.countdown);
+    if (state.phase === "countdown" && secs <= 3 && secs > 0 && secs !== this.lastCountdownShown) {
+      this.lastCountdownShown = secs;
+      this.tweens.killTweensOf(this.bigCountdown);
+      this.bigCountdown.setText(String(secs)).setAlpha(1).setScale(1.6);
+      this.tweens.add({ targets: this.bigCountdown, scale: 1, alpha: 0, duration: 900, ease: "Quad.Out" });
+    }
+    if (state.phase !== "countdown") this.lastCountdownShown = -1;
     this.minimap.update();
   }
 
@@ -274,26 +370,4 @@ export class HudScene extends Phaser.Scene {
     this.lobbyText.setText(lines.join("\n"));
   }
 
-  private renderShop() {
-    const me = this.net.me!;
-    const lines: string[] = ["TIENDA  ·  pulsa el número para comprar", ""];
-
-    lines.push("ARMAS");
-    WEAPON_IDS.forEach((id, i) => {
-      const w = WEAPONS[id];
-      const tag = me.weapon === id ? "[equipada]" : `$${w.cost}`;
-      lines.push(`  ${i + 1}. ${w.name.padEnd(10)} ${tag.padEnd(11)} daño ${String(w.damage).padStart(2)}  ${w.fireRate}/s`);
-    });
-
-    lines.push("", "MEJORAS");
-    UPGRADE_IDS.forEach((id: UpgradeId, i) => {
-      const u = UPGRADES[id];
-      const level = me[id];
-      const tag = level >= u.maxLevel ? "[MÁX]" : `$${upgradeCost(id, level)}`;
-      lines.push(`  ${i + 5}. ${u.name.padEnd(12)} ${level}/${u.maxLevel}  ${tag.padEnd(7)} ${u.description}`);
-    });
-
-    lines.push("", `Dinero disponible: $${me.money}`);
-    this.shopText.setText(lines.join("\n"));
-  }
 }

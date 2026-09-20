@@ -36,6 +36,7 @@ export class BootScene extends Phaser.Scene {
 
   create() {
     generateTextures(this);
+    this.game.events.emit("assets-ready");
     this.scene.start("game");
   }
 }

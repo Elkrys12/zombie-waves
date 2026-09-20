@@ -55,7 +55,9 @@ async function connect(action: (net: NetworkManager, name: string) => Promise<un
   try {
     const net = new NetworkManager();
     await action(net, name);
-    menu.classList.add("hidden");
+    // El menú se queda de fondo (con "Cargando...") hasta que la fuente y los sprites estén listos
+    menu.classList.add("loading");
+    await Promise.race([document.fonts.load("20px Bangers"), new Promise((r) => setTimeout(r, 1500))]).catch(() => undefined);
     startGame(net);
     // ?start=1 (pruebas): el anfitrión arranca la partida sin pulsar ENTER
     if (params.get("start")) setTimeout(() => net.startGame(), 500);
@@ -95,11 +97,12 @@ function startGame(net: NetworkManager) {
       // La conexión ya está abierta: la dejamos en el registry antes de que arranquen las escenas
       preBoot: (g) => {
         g.registry.set("net", net);
+        g.events.once("assets-ready", () => { menu.classList.add("hidden"); menu.classList.remove("loading"); });
         // Salir de la partida: cerrar la conexión, destruir el juego y volver al menú
         g.registry.set("onExit", async () => {
           await net.leave();
           game.destroy(true);
-          menu.classList.remove("hidden");
+          menu.classList.remove("hidden", "loading");
           buttons.forEach((b) => (b.disabled = false));
           history.replaceState(null, "", location.pathname); // limpia ?sala=... y ?auto=
         });

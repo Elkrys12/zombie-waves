@@ -374,7 +374,7 @@ export class GameRoom extends Room<{ state: GameState }> {
       if (hitT <= 1) {
         bullet.x = x0 + dx * hitT;
         bullet.y = y0 + dy * hitT;
-        if (hitId) this.damageZombie(hitId, data.damage, bullet.ownerId);
+        if (hitId) this.damageZombie(hitId, data.damage, bullet.ownerId, dx / (step || 1), dy / (step || 1));
         toRemove.push(id);
         return;
       }
@@ -390,10 +390,22 @@ export class GameRoom extends Room<{ state: GameState }> {
     }
   }
 
-  private damageZombie(id: string, damage: number, killerId: string) {
+  private damageZombie(id: string, damage: number, killerId: string, dirX = 0, dirY = 0) {
     const zombie = this.state.zombies.get(id);
     if (!zombie) return;
     zombie.hp -= damage;
+
+    // Empujón hacia atrás proporcional al daño (el tank apenas se inmuta)
+    const config = ZOMBIES[zombie.type as ZombieType];
+    const push = Math.min(14, damage * 0.35) * (16 / config.radius);
+    const pos = resolveCircleCollisions(
+      Math.max(config.radius, Math.min(MAP_WIDTH - config.radius, zombie.x + dirX * push)),
+      Math.max(config.radius, Math.min(MAP_HEIGHT - config.radius, zombie.y + dirY * push)),
+      config.radius,
+    );
+    zombie.x = pos.x;
+    zombie.y = pos.y;
+
     if (zombie.hp > 0) return;
 
     const killer = this.state.players.get(killerId);
@@ -509,14 +521,15 @@ export class GameRoom extends Room<{ state: GameState }> {
       }
     });
 
-    // Separación simple para que no se apilen todos en el mismo punto
+    // Separación para que no se apilen: dos pasadas con un pequeño margen extra
     const ids = Array.from(this.state.zombies.keys());
+    for (let pass = 0; pass < 2; pass++)
     for (let i = 0; i < ids.length; i++) {
       const a = this.state.zombies.get(ids[i])!;
       const ra = ZOMBIES[a.type as ZombieType].radius;
       for (let j = i + 1; j < ids.length; j++) {
         const b = this.state.zombies.get(ids[j])!;
-        const minDist = ra + ZOMBIES[b.type as ZombieType].radius;
+        const minDist = ra + ZOMBIES[b.type as ZombieType].radius + 4;
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dist = Math.hypot(dx, dy) || 0.01;

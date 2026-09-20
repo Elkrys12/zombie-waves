@@ -3,9 +3,10 @@ import type { NetworkManager } from "../net/NetworkManager";
 import { SoundManager } from "../audio/SoundManager";
 import { PLAYER_SPRITES } from "./BootScene";
 import { MapRenderer } from "../gfx/MapRenderer";
-import { Lighting } from "../gfx/Lighting";
+import { Lighting, type LightSource } from "../gfx/Lighting";
+import { Effects } from "../gfx/Effects";
 import {
-  MAP_WIDTH, MAP_HEIGHT, PLAYER_RADIUS, ZOMBIES,
+  MAP_WIDTH, MAP_HEIGHT, PLAYER_RADIUS, ZOMBIES, WEAPONS, pointBlocked,
   type PlayerState, type ZombieState, type BulletState, type WeaponId, type WavePhase,
 } from "@zombie-waves/shared";
 
@@ -50,6 +51,9 @@ export class GameScene extends Phaser.Scene {
   private blood!: Phaser.GameObjects.Particles.ParticleEmitter;
   private damageFlash!: Phaser.GameObjects.Rectangle;
   private lighting!: Lighting;
+  private fx!: Effects;
+  private lightningTimer = 12; // segundos hasta el próximo relámpago
+  private lightningLeft = 0;   // segundos que quedan de destello
   private lamps: { x: number; y: number }[] = [];
   private keys!: Record<"W" | "A" | "S" | "D" | "UP" | "DOWN" | "LEFT" | "RIGHT", Phaser.Input.Keyboard.Key>;
   private colorIndex = 0;
@@ -70,6 +74,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, MAP_WIDTH, MAP_HEIGHT);
     this.lamps = new MapRenderer(this).draw();
     this.lighting = new Lighting(this);
+    this.fx = new Effects(this);
 
     // Partículas de sangre (se disparan con explode)
     this.blood = this.add.particles(0, 0, "particle", {
@@ -125,6 +130,11 @@ export class GameScene extends Phaser.Scene {
           if (prev !== undefined && money < prev) this.sfx.purchase();
         });
       }
+      $(player).listen("hp", (hp: number, prev: number) => {
+        if (prev === undefined || hp >= prev) return;
+        const view = this.players.get(id);
+        if (view) this.lungeNearest(view.root.x, view.root.y);
+      });
     });
 
     $(state).players.onRemove((_player: PlayerState, id: string) => {
@@ -157,6 +167,7 @@ export class GameScene extends Phaser.Scene {
         if (prev === undefined || hp >= prev) return;
         this.blood.explode(6, sprite.x, sprite.y);
         this.sfx.zombieHit();
+        this.fx.damageNumber(sprite.x, sprite.y - config.radius, prev - hp, hp <= 0);
         sprite.setTintFill(0xffffff);
         this.time.delayedCall(50, () => sprite.clearTint());
       });
@@ -166,6 +177,7 @@ export class GameScene extends Phaser.Scene {
       const view = this.zombies.get(id);
       if (!view) return;
       this.onZombieDeath(view.sprite.x, view.sprite.y);
+      this.fx.zombieDeath(view.sprite);
       [view.sprite, view.shadow, view.hpBg, view.hpBar].forEach((o) => o.destroy());
       this.zombies.delete(id);
     });
@@ -176,8 +188,14 @@ export class GameScene extends Phaser.Scene {
       this.onShot(bullet);
     });
 
-    $(state).bullets.onRemove((_bullet: BulletState, id: string) => {
-      this.bullets.get(id)?.destroy();
+    $(state).bullets.onRemove((bullet: BulletState, id: string) => {
+      const img = this.bullets.get(id);
+      if (img) {
+        // Si termina pegada a un muro o edificio, chispas (si dio a un zombie ya salpicó sangre)
+        const ahead = { x: bullet.x + Math.cos(bullet.angle) * 6, y: bullet.y + Math.sin(bullet.angle) * 6 };
+        if (pointBlocked(ahead.x, ahead.y) || pointBlocked(bullet.x, bullet.y)) this.fx.wallSparks(bullet.x, bullet.y);
+        img.destroy();
+      }
       this.bullets.delete(id);
     });
 
@@ -207,6 +225,18 @@ export class GameScene extends Phaser.Scene {
     if (bullet.ownerId === this.net.sessionId || Math.random() < 0.5) {
       this.sfx.shoot(owner.weapon as WeaponId, factor);
     }
+
+    // Retroceso, casquillo y golpe de cámara (una vez por disparo aunque la escopeta cree varias balas)
+    const view = this.players.get(bullet.ownerId);
+    const now = this.time.now;
+    if (view && now - ((view.root.getData("lastShot") as number | undefined) ?? 0) > 30) {
+      view.root.setData("lastShot", now);
+      const weapon = WEAPONS[owner.weapon as WeaponId];
+      const kick = weapon.bulletsPerShot > 1 ? 9 : weapon.damage > 30 ? 7 : 4;
+      this.fx.recoil(view.body, kick);
+      this.fx.casing(view.root.x + Math.cos(owner.angle) * 10, view.root.y + Math.sin(owner.angle) * 10, owner.angle);
+      if (bullet.ownerId === this.net.sessionId) this.cameras.main.shake(70, kick * 0.0006);
+    }
   }
 
   private onZombieDeath(x: number, y: number) {
@@ -217,6 +247,17 @@ export class GameScene extends Phaser.Scene {
     this.decals.push(decal);
     if (this.decals.length > MAX_DECALS) this.decals.shift()?.destroy();
     this.tweens.add({ targets: decal, alpha: 0, delay: 8000, duration: 3000, onComplete: () => decal.destroy() });
+  }
+
+  /** El zombie más cercano a un punto (a distancia de mordisco) hace el gesto de ataque. */
+  private lungeNearest(x: number, y: number) {
+    let best: Phaser.GameObjects.Image | undefined;
+    let bestD = 70;
+    this.zombies.forEach((view) => {
+      const d = Math.hypot(view.sprite.x - x, view.sprite.y - y);
+      if (d < bestD) { bestD = d; best = view.sprite; }
+    });
+    if (best) this.fx.lunge(best);
   }
 
   private onLocalDamage() {
@@ -234,25 +275,43 @@ export class GameScene extends Phaser.Scene {
     this.syncPlayers(time);
     this.syncZombies(time);
     this.syncBullets();
+    this.updateWeather(delta / 1000);
     this.updateLighting(delta / 1000);
+    this.fx.update();
+  }
+
+  private updateWeather(dt: number) {
+    const night = this.net.state.phase === "active" || this.net.state.phase === "gameover";
+    this.fx.rainIntensity = Phaser.Math.Linear(this.fx.rainIntensity, night ? 1 : 0.25, Math.min(1, dt * 0.5));
+
+    if (this.lightningLeft > 0) this.lightningLeft -= dt;
+    if (!night) return;
+    this.lightningTimer -= dt;
+    if (this.lightningTimer <= 0) {
+      this.lightningTimer = 14 + Math.random() * 26;
+      this.lightningLeft = this.fx.lightning() / 1000;
+      this.cameras.main.shake(200, 0.002);
+    }
   }
 
   private updateLighting(dt: number) {
-    const lights: { x: number; y: number; radius: number }[] = [];
+    const lights: LightSource[] = [];
     this.players.forEach((view, id) => {
       const player = this.net.state.players.get(id);
       if (!player) return;
-      // Los muertos conservan una luz tenue para poder seguir la partida
-      const radius = !player.alive ? 220 : id === this.net.sessionId ? 420 : 300;
-      lights.push({ x: view.root.x, y: view.root.y, radius });
+      // Los muertos conservan una luz tenue; los vivos llevan linterna en cono hacia donde apuntan
+      if (!player.alive) lights.push({ x: view.root.x, y: view.root.y, radius: 220 });
+      else lights.push({ x: view.root.x, y: view.root.y, radius: id === this.net.sessionId ? 520 : 400, angle: player.angle, cone: 1.15 });
     });
-    // Farolas del pueblo
-    for (const l of this.lamps) lights.push({ x: l.x, y: l.y, radius: 230 });
+    // Farolas del pueblo, con un parpadeo sutil
+    const t = this.time.now / 1000;
+    this.lamps.forEach((l, i) => lights.push({ x: l.x + 24, y: l.y, radius: 230 + Math.sin(t * 7 + i * 1.7) * 6 + Math.sin(t * 23 + i) * 3 }));
     // Las balas iluminan un poco a su paso
     this.bullets.forEach((b) => lights.push({ x: b.x, y: b.y, radius: 60 }));
     // De día en la sala de espera; anochece cuando empieza la acción
-    const target = this.net.state.phase === "active" || this.net.state.phase === "gameover" ? 0.78 : 0.45;
-    this.lighting.darkness = Phaser.Math.Linear(this.lighting.darkness, target, Math.min(1, dt * 0.8));
+    let target = this.net.state.phase === "active" || this.net.state.phase === "gameover" ? 0.8 : 0.45;
+    if (this.lightningLeft > 0) target = 0.15; // el relámpago ilumina todo el mapa un instante
+    this.lighting.darkness = Phaser.Math.Linear(this.lighting.darkness, target, Math.min(1, dt * (this.lightningLeft > 0 ? 12 : 0.8)));
     this.lighting.update(dt, lights);
   }
 
@@ -286,7 +345,7 @@ export class GameScene extends Phaser.Scene {
       view.root.setAlpha(player.alive ? 1 : 0.35);
 
       // Balanceo al andar
-      const bob = view.moving && player.alive ? 1 + Math.sin(time / 60) * 0.05 : 1;
+      const bob = !player.alive ? 1 : view.moving ? 1 + Math.sin(time / 60) * 0.05 : 1 + Math.sin(time / 420) * 0.015;
       const base = view.body.getData("base") as number;
       view.body.setScale(base * bob, base * (2 - bob));
 

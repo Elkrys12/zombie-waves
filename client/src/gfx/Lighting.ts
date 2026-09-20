@@ -1,5 +1,13 @@
 import Phaser from "phaser";
 
+export interface LightSource {
+  x: number;
+  y: number;
+  radius: number;
+  angle?: number;
+  cone?: number;
+}
+
 /**
  * Oscuridad ambiental con "linternas" alrededor de los jugadores y destellos.
  * Se pinta en un canvas 2D propio (a media resolución) que se muestra como imagen fija a la cámara:
@@ -47,8 +55,11 @@ export class Lighting {
     this.flashes.push({ x, y, size, ttl });
   }
 
-  /** @param lights posiciones de las fuentes de luz (mundo) con su radio */
-  update(dt: number, lights: { x: number; y: number; radius: number }[]) {
+  /**
+   * @param lights fuentes de luz (mundo) con su radio; si llevan `angle` y `cone` (radianes)
+   *               se dibujan como linterna: un cono en esa dirección más un pequeño halo alrededor
+   */
+  update(dt: number, lights: LightSource[]) {
     const cam = this.scene.cameras.main;
     const s = Lighting.SCALE;
     const ctx = this.texture.getContext();
@@ -64,7 +75,25 @@ export class Lighting {
       const r = radius * s;
       ctx.drawImage(this.lightSprite, (x - cam.scrollX) * s - r, (y - cam.scrollY) * s - r, r * 2, r * 2);
     };
-    for (const l of lights) drawLight(l.x, l.y, l.radius);
+    const drawCone = (x: number, y: number, radius: number, angle: number, cone: number) => {
+      const cx = (x - cam.scrollX) * s, cy = (y - cam.scrollY) * s, r = radius * s;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, angle - cone / 2, angle + cone / 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(this.lightSprite, cx - r, cy - r, r * 2, r * 2);
+      ctx.restore();
+    };
+    for (const l of lights) {
+      if (l.angle !== undefined && l.cone !== undefined) {
+        drawCone(l.x, l.y, l.radius, l.angle, l.cone);
+        drawLight(l.x, l.y, l.radius * 0.38); // halo cercano para no quedarse a ciegas por detrás
+      } else {
+        drawLight(l.x, l.y, l.radius);
+      }
+    }
 
     for (let i = this.flashes.length - 1; i >= 0; i--) {
       const f = this.flashes[i];
