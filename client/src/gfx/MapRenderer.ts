@@ -4,9 +4,9 @@ import {
   type Obstacle, type GroundKind,
 } from "@zombie-waves/shared";
 
-const GROUND_TEXTURE: Record<GroundKind, string> = { grass: "grass", asphalt: "asphalt", concrete: "concrete", dirt: "dirt" };
-const CAR_KEYS = ["car_red_1", "car_blue_1", "car_green_1", "car_yellow_1", "car_black_1"];
-const ROOF_COLORS = [0xb5473a, 0x5b7f96, 0x8a6b4f, 0x4f7f5a, 0x9c8a6e, 0x6e6e78];
+const GROUND_TEXTURE: Record<GroundKind, string> = { grass: "ground_grass", asphalt: "ground_asphalt", concrete: "ground_concrete", dirt: "ground_dirt" };
+const CAR_KEYS = ["car_red", "car_blue", "car_green", "car_white"];
+const ROOFS = ["roof_red", "roof_gray", "roof_brown"];
 
 /** Farolas: iluminan de noche (posiciones devueltas a la escena). */
 const LAMPS = [
@@ -16,16 +16,25 @@ const LAMPS = [
 ];
 
 /** Decoración sin colisión: conos, rocas, arbustos, neumáticos. */
-const DECOR: { key: string; x: number; y: number; scale?: number; rot?: number }[] = [
-  { key: "cone_straight", x: 1180, y: 1450, scale: 0.5 }, { key: "cone_straight", x: 1210, y: 1470, scale: 0.5 }, { key: "cone_straight", x: 2020, y: 1740, scale: 0.5 },
-  { key: "cone_straight", x: 1560, y: 520, scale: 0.5 }, { key: "cone_straight", x: 1650, y: 2620, scale: 0.5 },
-  { key: "rock1", x: 2300, y: 450, scale: 0.7 }, { key: "rock2", x: 2700, y: 900, scale: 0.6 }, { key: "rock_a", x: 2450, y: 1000 }, { key: "rock_b", x: 2950, y: 300 },
-  { key: "rock_a", x: 3000, y: 1000 }, { key: "rock_b", x: 2200, y: 800 },
-  { key: "bush", x: 200, y: 1000 }, { key: "bush", x: 1100, y: 1000 }, { key: "bush_orange", x: 520, y: 1600 }, { key: "bush", x: 1050, y: 1700 },
-  { key: "bush", x: 150, y: 1700 }, { key: "bush_orange", x: 800, y: 1200 }, { key: "bush", x: 3000, y: 2000 }, { key: "bush_orange", x: 2300, y: 1300 },
-  { key: "tires_white", x: 2400, y: 2700, scale: 0.8 }, { key: "tires_white", x: 2440, y: 2720, scale: 0.8 }, { key: "tires_white", x: 1150, y: 2650, scale: 0.8 },
-  { key: "barrel_gray", x: 2470, y: 2920 }, { key: "crate_small", x: 2330, y: 2440 }, { key: "crate_small", x: 2900, y: 700 },
-  { key: "splat_dark", x: 1500, y: 1400, scale: 1.2 }, { key: "splat_dark", x: 640, y: 2300 }, { key: "splat_dark", x: 2600, y: 1560 },
+const DECOR: { key: string; x: number; y: number; size: number; rot?: number }[] = [
+  // conos en los cruces y accesos
+  { key: "cone", x: 1180, y: 1450, size: 22 }, { key: "cone", x: 1210, y: 1470, size: 22 }, { key: "cone", x: 2020, y: 1740, size: 22 },
+  { key: "cone", x: 1560, y: 520, size: 22 }, { key: "cone", x: 1650, y: 2620, size: 22 }, { key: "cone", x: 1000, y: 1560, size: 22 },
+  // rocas en el campo y el parque
+  { key: "rock", x: 2300, y: 450, size: 60 }, { key: "rock", x: 2700, y: 900, size: 48 }, { key: "rock", x: 2450, y: 1000, size: 36 },
+  { key: "rock", x: 2950, y: 300, size: 44 }, { key: "rock", x: 3000, y: 1000, size: 52 }, { key: "rock", x: 2200, y: 800, size: 34 }, { key: "rock", x: 500, y: 1550, size: 40 },
+  // arbustos
+  { key: "bush", x: 200, y: 1000, size: 56 }, { key: "bush", x: 1100, y: 1000, size: 50 }, { key: "bush", x: 520, y: 1600, size: 60 }, { key: "bush", x: 1050, y: 1700, size: 48 },
+  { key: "bush", x: 150, y: 1700, size: 54 }, { key: "bush", x: 800, y: 1200, size: 46 }, { key: "bush", x: 3000, y: 2000, size: 58 }, { key: "bush", x: 2300, y: 1300, size: 50 },
+  { key: "bush", x: 560, y: 480, size: 44 }, { key: "bush", x: 1060, y: 520, size: 40 }, { key: "bush", x: 2840, y: 560, size: 48 },
+  // buzones e hidrantes junto a las casas y calles
+  { key: "mailbox", x: 300, y: 470, size: 36, rot: 1.57 }, { key: "mailbox", x: 800, y: 430, size: 36, rot: 1.57 }, { key: "mailbox", x: 900, y: 980, size: 36, rot: 1.57 },
+  { key: "hydrant", x: 1440, y: 1200, size: 22 }, { key: "hydrant", x: 1760, y: 2000, size: 22 }, { key: "hydrant", x: 1200, y: 1760, size: 22 }, { key: "hydrant", x: 2000, y: 1440, size: 22 },
+  // neumáticos y trastos del almacén / aparcamiento
+  { key: "tires", x: 2400, y: 2700, size: 44 }, { key: "tires", x: 2440, y: 2720, size: 44 }, { key: "tires", x: 1150, y: 2650, size: 44 },
+  { key: "barrel", x: 2470, y: 2920, size: 30 }, { key: "crate", x: 2330, y: 2440, size: 30 }, { key: "crate", x: 2900, y: 700, size: 28 },
+  // manchas viejas en el suelo
+  { key: "blood_splat", x: 1500, y: 1400, size: 70 }, { key: "blood_splat", x: 640, y: 2300, size: 60 }, { key: "blood_splat", x: 2600, y: 1560, size: 64 },
 ];
 
 /**
@@ -40,7 +49,11 @@ export class MapRenderer {
     this.drawGround();
     this.drawRoadMarkings();
     this.drawSpawnMarkers();
-    for (const d of DECOR) this.scene.add.image(d.x, d.y, d.key).setScale(d.scale ?? 1).setRotation(d.rot ?? Math.random() * 6.28).setDepth(3);
+    for (const d of DECOR) {
+      const img = this.scene.add.image(d.x, d.y, d.key).setRotation(d.rot ?? Math.random() * 6.28).setDepth(3);
+      img.setScale(d.size / Math.max(img.width, img.height));
+      if (d.key === "blood_splat") img.setAlpha(0.6);
+    }
     for (const o of OBSTACLES) this.drawObstacle(o);
     for (const l of LAMPS) this.drawLamp(l.x, l.y);
     this.scene.add.rectangle(0, 0, MAP_WIDTH, MAP_HEIGHT).setOrigin(0).setStrokeStyle(8, 0x101014, 0.9).setDepth(6);
@@ -48,9 +61,10 @@ export class MapRenderer {
   }
 
   private drawGround() {
-    this.scene.add.tileSprite(0, 0, MAP_WIDTH, MAP_HEIGHT, GROUND_TEXTURE.grass).setOrigin(0).setDepth(0);
+    const GROUND_SCALE: Record<GroundKind, number> = { grass: 0.45, asphalt: 0.6, concrete: 0.55, dirt: 0.45 };
+    this.scene.add.tileSprite(0, 0, MAP_WIDTH, MAP_HEIGHT, GROUND_TEXTURE.grass).setOrigin(0).setDepth(0).setTileScale(GROUND_SCALE.grass);
     for (const z of GROUND_ZONES) {
-      this.scene.add.tileSprite(z.x, z.y, z.w, z.h, GROUND_TEXTURE[z.kind]).setOrigin(0).setDepth(1);
+      this.scene.add.tileSprite(z.x, z.y, z.w, z.h, GROUND_TEXTURE[z.kind]).setOrigin(0).setDepth(1).setTileScale(GROUND_SCALE[z.kind]);
       if (z.kind !== "asphalt") this.scene.add.rectangle(z.x, z.y, z.w, z.h).setOrigin(0).setStrokeStyle(4, 0x000000, 0.2).setDepth(1);
     }
     // Aceras (borde claro) a lo largo de las carreteras
@@ -83,14 +97,12 @@ export class MapRenderer {
   }
 
   private drawLamp(x: number, y: number) {
-    // Farola vista desde arriba: base, brazo, cabeza luminosa y halo cálido en el suelo
+    // Farola vista desde arriba: halo cálido en el suelo + sprite (la base del poste es el pivote)
     const s = this.scene;
-    s.add.circle(x, y, 60, 0xffe0a0, 0.10).setDepth(3);
-    s.add.circle(x, y, 28, 0xffe0a0, 0.12).setDepth(3);
-    s.add.circle(x + 3, y + 4, 9, 0x000000, 0.3).setDepth(4);
-    s.add.circle(x, y, 8, 0x4a4a4f).setStrokeStyle(2, 0x26262a).setDepth(22);
-    s.add.rectangle(x + 11, y, 22, 5, 0x4a4a4f).setDepth(22);
-    s.add.circle(x + 24, y, 9, 0xfff3c4).setStrokeStyle(2, 0x8a7a40).setDepth(22);
+    s.add.circle(x + 24, y, 64, 0xffe0a0, 0.10).setDepth(3);
+    s.add.circle(x + 24, y, 30, 0xffe0a0, 0.12).setDepth(3);
+    s.add.circle(x + 3, y + 4, 11, 0x000000, 0.3).setDepth(4);
+    s.add.image(x, y, "lamp_post").setOrigin(0.2, 0.5).setScale(0.45).setDepth(22);
   }
 
   private drawObstacle(o: Obstacle) {
@@ -102,48 +114,41 @@ export class MapRenderer {
       case "wall": {
         const r = { x: o.x - o.w / 2, y: o.y - o.h / 2 };
         s.add.rectangle(r.x + 3, r.y + 4, o.w, o.h, 0x000000, 0.3).setOrigin(0).setDepth(4);
-        s.add.tileSprite(r.x, r.y, o.w, o.h, "brick").setOrigin(0).setDepth(5).setTileScale(0.5);
-        s.add.rectangle(r.x, r.y, o.w, o.h).setOrigin(0).setStrokeStyle(2, 0x4f3a2a).setDepth(5);
+        s.add.tileSprite(r.x, r.y, o.w, o.h, "wall_brick").setOrigin(0).setDepth(5).setTileScale(0.12);
+        s.add.rectangle(r.x, r.y, o.w, o.h).setOrigin(0).setStrokeStyle(2, 0x2a1d17).setDepth(5);
         break;
       }
       case "fence": {
-        const g = s.add.graphics().setDepth(5);
-        const x = o.x - o.w / 2, y = o.y - o.h / 2;
-        g.fillStyle(0x000000, 0.25).fillRect(x + 2, y + 3, o.w, o.h);
-        g.fillStyle(0xf2f2f2).fillRect(x, y, o.w, o.h);
-        g.fillStyle(0xd0d0d0);
-        if (o.w > o.h) for (let i = 0; i <= o.w; i += 40) g.fillRect(x + i - 3, y - 4, 6, o.h + 8);
-        else for (let i = 0; i <= o.h; i += 40) g.fillRect(x - 4, y + i - 3, o.w + 8, 6);
+        // Valla: el sprite se repite a lo largo; las verticales se giran 90°
+        const horizontal = o.w >= o.h;
+        const length = horizontal ? o.w : o.h;
+        const thickness = 26;
+        const tex = s.textures.get("fence_white").getSourceImage() as HTMLImageElement;
+        const k = thickness / tex.height;
+        s.add.ellipse(o.x + 2, o.y + 4, horizontal ? length : thickness, horizontal ? thickness : length, 0x000000, 0.25).setDepth(4);
+        s.add.tileSprite(o.x, o.y, length, thickness, "fence_white").setTileScale(k).setRotation(horizontal ? 0 : Math.PI / 2).setDepth(5);
         break;
       }
-      case "sandbag": {
-        const g = s.add.graphics().setDepth(5);
-        const x = o.x - o.w / 2, y = o.y - o.h / 2;
-        g.fillStyle(0x000000, 0.3).fillRoundedRect(x + 2, y + 3, o.w, o.h, 8);
-        for (let i = 0; i < o.w; i += 30) {
-          g.fillStyle(0xc9b37f).fillRoundedRect(x + i, y, 30, o.h, 8);
-          g.lineStyle(2, 0x9a865a).strokeRoundedRect(x + i + 1, y + 1, 28, o.h - 2, 8);
-        }
+      case "sandbag":
+        s.add.ellipse(o.x + 2, o.y + 4, o.w + 6, o.h + 10, 0x000000, 0.3).setDepth(4);
+        s.add.image(o.x, o.y, "sandbags").setDisplaySize(o.w + 8, o.h + 8).setDepth(5);
         break;
-      }
       case "tree": {
-        const key = o.w >= 85 ? "tree_large" : "tree_medium";
+        const key = o.w >= 80 ? "tree_big" : "tree_small";
         s.add.ellipse(o.x + 6, o.y + 8, o.w * 1.1, o.h * 1.0, 0x000000, 0.3).setDepth(3);
         s.add.image(o.x, o.y, key).setDisplaySize(o.w * 1.15, o.h * 1.15).setDepth(20).setAngle(Math.random() * 360).setAlpha(0.95);
         break;
       }
       case "barrel":
         if (o.w >= 80) s.add.image(o.x, o.y, "fountain").setDisplaySize(o.w + 4, o.h + 4).setDepth(5);
-        else s.add.image(o.x, o.y, "barrel").setDisplaySize(o.w + 10, o.h + 10).setDepth(5);
+        else s.add.image(o.x, o.y, "barrel").setDisplaySize(o.w + 6, o.h + 6).setDepth(5);
         break;
       case "crate":
-        s.add.image(o.x, o.y, "crate").setDisplaySize(o.w + 8, o.h + 8).setDepth(5);
+        s.add.image(o.x, o.y, "crate").setDisplaySize(o.w + 4, o.h + 4).setDepth(5);
         break;
       case "car": {
-        // Los coches de Kenney apuntan hacia arriba: +90° para que miren a la derecha con rotación 0
         const img = s.add.image(o.x, o.y, CAR_KEYS[(o.variant ?? 0) % CAR_KEYS.length]).setDepth(5);
-        const k = o.w / img.height; // el "largo" del coche es su alto en la textura
-        img.setScale(k).setRotation((o.rotation ?? 0) + Math.PI / 2);
+        img.setScale((o.w + 10) / img.width).setRotation(o.rotation ?? 0);
         s.add.ellipse(o.x + 4, o.y + 6, o.w, o.h + 6, 0x000000, 0.3).setRotation(o.rotation ?? 0).setDepth(4);
         break;
       }
@@ -152,28 +157,19 @@ export class MapRenderer {
 
   private drawBuilding(o: Obstacle) {
     const x = o.x - o.w / 2, y = o.y - o.h / 2;
-    const base = ROOF_COLORS[(o.variant ?? 0) % ROOF_COLORS.length];
-    const col = Phaser.Display.Color.IntegerToColor(base);
-    const light = col.clone().lighten(14).color;
-    const dark = col.clone().darken(22).color;
-    const line = col.clone().darken(40).color;
-    const g = this.scene.add.graphics().setDepth(21);
+    const roof = ROOFS[(o.variant ?? 0) % ROOFS.length];
+    const s = this.scene;
 
-    this.scene.add.rectangle(x + 12, y + 16, o.w, o.h, 0x000000, 0.4).setOrigin(0).setDepth(4); // sombra proyectada
-    g.fillStyle(0x2e2622).fillRect(x - 8, y - 8, o.w + 16, o.h + 16); // alero / paredes
-    g.fillStyle(0x4a3d36).fillRect(x - 5, y - 5, o.w + 10, o.h + 10);
+    s.add.rectangle(x + 12, y + 16, o.w, o.h, 0x000000, 0.4).setOrigin(0).setDepth(4); // sombra proyectada
+    s.add.rectangle(x - 8, y - 8, o.w + 16, o.h + 16, 0x2e2622).setOrigin(0).setDepth(21); // alero
+    s.add.rectangle(x - 5, y - 5, o.w + 10, o.h + 10, 0x4a3d36).setOrigin(0).setDepth(21);
+    s.add.tileSprite(x, y, o.w, o.h, roof).setOrigin(0).setDepth(21).setTileScale(0.22); // tejas
 
-    // Dos vertientes: la norte recibe la luz, la sur queda en sombra
-    g.fillStyle(light).fillRect(x, y, o.w, o.h / 2);
-    g.fillStyle(dark).fillRect(x, o.y, o.w, o.h / 2);
-    // Tejas: hileras horizontales con juntas desplazadas
-    g.lineStyle(1, line, 0.45);
-    for (let ty = y + 10; ty < y + o.h; ty += 10) g.lineBetween(x, ty, x + o.w, ty);
-    for (let ty = y, row = 0; ty < y + o.h; ty += 10, row++) {
-      for (let tx = x + (row % 2) * 12; tx < x + o.w; tx += 24) g.lineBetween(tx, ty, tx, Math.min(ty + 10, y + o.h));
-    }
-    g.lineStyle(4, line, 0.9).lineBetween(x, o.y, x + o.w, o.y); // cumbrera
-    g.lineStyle(3, 0x2e2622, 0.9).strokeRect(x, y, o.w, o.h);
+    const g = s.add.graphics().setDepth(22);
+    g.fillStyle(0xffffff, 0.10).fillRect(x, y, o.w, o.h / 2); // vertiente iluminada
+    g.fillStyle(0x000000, 0.18).fillRect(x, o.y, o.w, o.h / 2); // vertiente en sombra
+    g.lineStyle(5, 0x2a1d17, 0.85).lineBetween(x, o.y, x + o.w, o.y); // cumbrera
+    g.lineStyle(3, 0x2a1d17, 0.9).strokeRect(x, y, o.w, o.h);
 
     // Chimenea (con sombra), claraboya y, en naves grandes, depósito de agua
     g.fillStyle(0x000000, 0.35).fillRect(x + 30, y + 26, 26, 26);

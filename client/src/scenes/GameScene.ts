@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { NetworkManager } from "../net/NetworkManager";
 import { SoundManager } from "../audio/SoundManager";
-import { PLAYER_SKINS, WEAPON_POSE } from "./BootScene";
+import { PLAYER_SPRITES } from "./BootScene";
 import { MapRenderer } from "../gfx/MapRenderer";
 import { Lighting } from "../gfx/Lighting";
 import {
@@ -100,12 +100,13 @@ export class GameScene extends Phaser.Scene {
 
     $(state).players.onAdd((player: PlayerState, id: string) => {
       const isMe = id === this.net.sessionId;
-      const skin = PLAYER_SKINS[this.colorIndex++ % PLAYER_SKINS.length];
-      const body = this.add.image(0, 0, `${skin}_${WEAPON_POSE[player.weapon] ?? "gun"}`).setOrigin(0.4, 0.5);
-      const gun = body; // el sprite de Kenney ya incluye el arma
-      const shadow = this.add.ellipse(0, 4, 40, 34, 0x000000, 0.35);
+      // Sprite propio: la cabeza (pivote de giro) está a ~1/3 del ancho; el arma sobresale a la derecha
+      const body = this.add.image(0, 0, PLAYER_SPRITES[this.colorIndex++ % PLAYER_SPRITES.length]).setOrigin(0.3, 0.5);
+      const baseScale = (PLAYER_RADIUS * 3.4) / body.height;
+      body.setScale(baseScale).setData("base", baseScale);
+      const gun = body; // el sprite ya incluye el arma
+      const shadow = this.add.ellipse(2, 5, PLAYER_RADIUS * 3, PLAYER_RADIUS * 2.6, 0x000000, 0.35);
       const root = this.add.container(player.x, player.y, [shadow, body]).setDepth(10);
-      root.setData("skin", skin);
       const name = this.add.text(0, 0, player.name, { fontSize: "12px", color: "#fff", fontFamily: "system-ui", stroke: "#000", strokeThickness: 3 })
         .setOrigin(0.5, 1).setDepth(12);
       const hpBg = this.add.rectangle(0, 0, 40, 5, 0x000000, 0.6).setDepth(12);
@@ -135,8 +136,8 @@ export class GameScene extends Phaser.Scene {
 
     $(state).zombies.onAdd((zombie: ZombieState, id: string) => {
       const config = ZOMBIES[zombie.type];
-      const sprite = this.add.image(zombie.x, zombie.y, `zombie_${zombie.type}`).setOrigin(0.4, 0.5).setDepth(8);
-      const zScale = (config.radius * 2.4) / 43; // el sprite base mide 43 px de alto
+      const sprite = this.add.image(zombie.x, zombie.y, `zombie_${zombie.type}`).setOrigin(0.3, 0.5).setDepth(8);
+      const zScale = (config.radius * 2.7) / sprite.height; // la cabeza ocupa casi todo el alto del sprite
       sprite.setData("scale", zScale);
       const shadow = this.add.ellipse(zombie.x, zombie.y + 3, config.radius * 2.4, config.radius * 2.1, 0x000000, 0.35).setDepth(7);
       const w = config.radius * 2;
@@ -170,7 +171,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     $(state).bullets.onAdd((bullet: BulletState, id: string) => {
-      const img = this.add.image(bullet.x, bullet.y, "bullet").setRotation(bullet.angle).setDepth(9);
+      const img = this.add.image(bullet.x, bullet.y, "bullet").setScale(0.3).setRotation(bullet.angle).setDepth(9);
       this.bullets.set(id, img);
       this.onShot(bullet);
     });
@@ -196,7 +197,7 @@ export class GameScene extends Phaser.Scene {
     if (!owner) return;
 
     // Fogonazo en la boca del arma (sprite + luz)
-    const flash = this.add.image(bullet.x, bullet.y, "flash").setOrigin(0, 0.5).setRotation(bullet.angle).setDepth(11);
+    const flash = this.add.image(bullet.x, bullet.y, "muzzle_flash").setOrigin(0, 0.5).setScale(0.45).setRotation(bullet.angle).setDepth(11);
     this.time.delayedCall(60, () => flash.destroy());
     this.lighting.addFlash(bullet.x, bullet.y);
 
@@ -212,7 +213,7 @@ export class GameScene extends Phaser.Scene {
     this.blood.explode(18, x, y);
     this.sfx.zombieDeath();
 
-    const decal = this.add.image(x, y, "blood_decal").setRotation(Math.random() * Math.PI * 2).setScale(0.8 + Math.random() * 0.5).setDepth(2).setAlpha(0.9);
+    const decal = this.add.image(x, y, "blood_splat").setRotation(Math.random() * Math.PI * 2).setScale(0.35 + Math.random() * 0.25).setDepth(2).setAlpha(0.9);
     this.decals.push(decal);
     if (this.decals.length > MAX_DECALS) this.decals.shift()?.destroy();
     this.tweens.add({ targets: decal, alpha: 0, delay: 8000, duration: 3000, onComplete: () => decal.destroy() });
@@ -286,9 +287,8 @@ export class GameScene extends Phaser.Scene {
 
       // Balanceo al andar
       const bob = view.moving && player.alive ? 1 + Math.sin(time / 60) * 0.05 : 1;
-      view.body.setScale(bob, 2 - bob);
-      const bodyKey = `${view.root.getData("skin")}_${player.alive ? WEAPON_POSE[player.weapon] ?? "gun" : "stand"}`;
-      if (view.body.texture.key !== bodyKey) view.body.setTexture(bodyKey);
+      const base = view.body.getData("base") as number;
+      view.body.setScale(base * bob, base * (2 - bob));
 
       view.name.setPosition(view.root.x, view.root.y - PLAYER_RADIUS - 12);
       view.hpBg.setPosition(view.root.x, view.root.y - PLAYER_RADIUS - 6);

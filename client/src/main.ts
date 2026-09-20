@@ -13,6 +13,10 @@ const buttons = Array.from(menu.querySelectorAll("button"));
 
 nameInput.value = localStorage.getItem("zw-name") ?? "";
 
+// Arte del menú (rutas relativas a la base de Vite para que funcione también en GitHub Pages)
+(document.getElementById("logo") as HTMLImageElement).src = `${import.meta.env.BASE_URL}assets/art/logo.png`;
+menu.style.backgroundImage = `url("${import.meta.env.BASE_URL}assets/art/menu_bg.png")`;
+
 // Enlace compartido: http://host/?sala=ABCDE rellena el código automáticamente
 const sharedCode = new URLSearchParams(location.search).get("sala");
 if (sharedCode) codeInput.value = sharedCode.toUpperCase();

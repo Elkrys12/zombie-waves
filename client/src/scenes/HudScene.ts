@@ -24,6 +24,7 @@ export class HudScene extends Phaser.Scene {
   private hpText!: Phaser.GameObjects.Text;
   private moneyText!: Phaser.GameObjects.Text;
   private weaponText!: Phaser.GameObjects.Text;
+  private weaponIcon!: Phaser.GameObjects.Image;
   private killsText!: Phaser.GameObjects.Text;
 
   private wavePanel!: Phaser.GameObjects.Container;
@@ -54,13 +55,17 @@ export class HudScene extends Phaser.Scene {
     this.sfx = this.registry.get("sfx") as SoundManager;
 
     // ---- Estado del jugador (arriba izquierda)
-    this.statusPanel = this.panel(0, 0, 250, 96);
-    this.statusPanel.add(this.add.rectangle(14, 14, 222, 18, 0x000000, 0.6).setOrigin(0));
-    this.hpBar = this.add.rectangle(15, 15, 220, 16, 0x7ed957).setOrigin(0);
-    this.hpText = this.text(125, 23, "", 12, C.text, "bold").setOrigin(0.5);
-    this.moneyText = this.text(14, 42, "", 16, C.gold, "bold");
-    this.weaponText = this.text(14, 64, "", 14, C.text);
-    this.killsText = this.text(236, 64, "", 14, C.muted).setOrigin(1, 0);
+    this.statusPanel = this.panel(0, 0, 270, 104);
+    this.statusPanel.add(this.icon(26, 24, "icon_heart", 22));
+    this.statusPanel.add(this.add.rectangle(42, 14, 214, 20, 0x000000, 0.6).setOrigin(0));
+    this.hpBar = this.add.rectangle(43, 15, 212, 18, 0x7ed957).setOrigin(0);
+    this.hpText = this.text(149, 24, "", 12, C.text, "bold").setOrigin(0.5);
+    this.statusPanel.add(this.icon(26, 54, "icon_money", 22));
+    this.moneyText = this.text(44, 44, "", 17, C.gold, "bold");
+    this.weaponIcon = this.icon(28, 82, "icon_pistol", 26);
+    this.statusPanel.add(this.weaponIcon);
+    this.weaponText = this.text(46, 73, "", 14, C.text);
+    this.killsText = this.text(256, 73, "", 13, C.muted).setOrigin(1, 0);
     this.statusPanel.add([this.hpBar, this.hpText, this.moneyText, this.weaponText, this.killsText]);
 
     // ---- Oleada (arriba centro)
@@ -83,9 +88,14 @@ export class HudScene extends Phaser.Scene {
     this.hint = this.text(0, 0, "B: tienda · M: sonido · ESC: menú", 12, C.muted).setOrigin(0, 1);
 
     // ---- Tienda
-    this.shopPanel = this.panel(0, 0, 520, 420).setVisible(false);
-    this.shopText = this.text(18, 14, "", 14, C.text).setLineSpacing(6).setFontFamily("Consolas, Menlo, monospace");
+    this.shopPanel = this.panel(0, 0, 560, 420).setVisible(false);
+    this.shopText = this.text(52, 14, "", 14, C.text).setLineSpacing(6).setFontFamily("Consolas, Menlo, monospace");
     this.shopPanel.add(this.shopText);
+    // Iconos alineados con las filas del texto (línea = 14 px de fuente + 6 de interlineado)
+    const line = 20;
+    WEAPON_IDS.forEach((id, i) => this.shopPanel.add(this.icon(32, 14 + line * (3 + i) + 8, `icon_${id}`, 24)));
+    const upgradeIcons: Record<UpgradeId, string> = { vest: "icon_vest", speed: "icon_speed", damage: "icon_damage", fire_rate: "icon_firerate", max_hp: "icon_hp" };
+    UPGRADE_IDS.forEach((id, i) => this.shopPanel.add(this.icon(32, 14 + line * (3 + WEAPON_IDS.length + 2 + i) + 8, upgradeIcons[id], 22)));
 
     // ---- Lobby (sala de espera)
     this.lobbyPanel = this.panel(0, 0, 500, 320).setVisible(false);
@@ -155,6 +165,13 @@ export class HudScene extends Phaser.Scene {
     onExit?.();
   }
 
+  /** Icono centrado en (x, y) ajustado a un tamaño máximo. */
+  private icon(x: number, y: number, key: string, size: number) {
+    const img = this.add.image(x, y, key);
+    img.setScale(size / Math.max(img.width, img.height));
+    return img;
+  }
+
   private text(x: number, y: number, str: string, size: number, color: string, style = "normal") {
     return this.add.text(x, y, str, { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: style });
   }
@@ -168,7 +185,7 @@ export class HudScene extends Phaser.Scene {
     this.codeText.setPosition(width - 16, height - 20 - this.minimap.size);
     this.banner.setPosition(width / 2, height / 2 - 80);
     this.hint.setPosition(16, height - 14);
-    this.shopPanel.setPosition(width / 2 - 260, height / 2 - 210);
+    this.shopPanel.setPosition(width / 2 - 280, height / 2 - 210);
     this.lobbyPanel.setPosition(width / 2 - 250, height / 2 - 160);
     this.pausePanel.setPosition(width / 2 - 180, height / 2 - 95);
   }
@@ -185,6 +202,11 @@ export class HudScene extends Phaser.Scene {
     this.hpText.setText(`${Math.ceil(me.hp)} / ${me.maxHp}`);
     this.moneyText.setText(`$ ${me.money}`);
     this.weaponText.setText(WEAPONS[me.weapon as WeaponId].name);
+    const weaponKey = `icon_${me.weapon}`;
+    if (this.weaponIcon.texture.key !== weaponKey) {
+      this.weaponIcon.setTexture(weaponKey);
+      this.weaponIcon.setScale(26 / Math.max(this.weaponIcon.width, this.weaponIcon.height));
+    }
     this.killsText.setText(`Bajas: ${me.kills}`);
 
     this.codeText.setText(`Sala ${state.code}${state.isPrivate ? " · privada" : ""}`);

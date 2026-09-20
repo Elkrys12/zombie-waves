@@ -8,9 +8,11 @@ Juego multijugador online de disparos con oleadas de zombies, jugable desde el n
 |---|---|
 | ![](docs/screenshots/plaza-dia.png) | ![](docs/screenshots/barrio-dia.png) |
 
-| Aparcamiento de noche | Plaza de noche |
+| Aparcamiento de noche | Almacén |
 |---|---|
-| ![](docs/screenshots/aparcamiento-noche.png) | ![](docs/screenshots/plaza-noche.png) |
+| ![](docs/screenshots/aparcamiento-noche.png) | ![](docs/screenshots/almacen.png) |
+
+![Menú](docs/screenshots/menu.png)
 
 ## Stack
 
@@ -124,9 +126,14 @@ Para que apunte a tu servidor, define la variable de repositorio **`VITE_SERVER_
 
 Mientras tanto puedes probar cualquier servidor sin reconstruir añadiendo `?server=wss://tu-servidor` a la URL del cliente.
 
-## Créditos
+## Arte
 
-Sprites de personajes, zombie, tiles, coches y props: [Kenney](https://kenney.nl) (packs *Top-Down Shooter* y *Racing Pack*, licencia CC0). Ver [client/public/assets/kenney/LICENSE.txt](client/public/assets/kenney/LICENSE.txt).
+Todo el arte (personajes, zombies, props, texturas, iconos, logo y fondo del menú) es propio, generado con IA a partir de los prompts de [docs/arte-prompts.md](docs/arte-prompts.md). Las imágenes originales van en `client/public/assets/custom/` (fuera de git por tamaño) y se procesan con:
+
+```bash
+node tools/process-art.mjs          # quita el fondo, recorta, reduce y guarda en client/public/assets/art
+node tools/process-art.mjs zombie_walker player_1   # solo algunos
+```
 
 ## Roadmap
 
