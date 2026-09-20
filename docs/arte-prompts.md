@@ -188,3 +188,34 @@ Same art style as the attached reference. Wide 16:9 illustration: a night suburb
 ## Orden recomendado
 
 1. `estilo.png` → 2. `zombie_walker.png`, `player_1.png` (validar) → 3. resto de zombies y personajes → 4. coches, árboles, arbusto, fuente → 5. suelos y tejados → 6. objetos, efectos, iconos → 7. logo y fondo.
+
+---
+
+## Fase 2 — arma intercambiable y cadáveres
+
+### Personajes sin arma (`player_1_base.png` … `player_4_base.png`)
+Usa el prompt de cada personaje sustituyendo la parte del arma por:
+`both arms extended forward with empty open hands as if holding an invisible rifle, facing right`
+
+### Armas (`weapon_pistol.png`, `weapon_smg.png`, `weapon_shotgun.png`, `weapon_rifle.png`)
+```
+Same art style as the attached reference. Single game sprite, top-down view seen from directly above (bird's-eye): a cartoon ARMA, barrel pointing right, horizontal. Thick dark outline, flat cel shading. Centered, filling the frame, transparent background, no ground shadow, no text.
+```
+ARMA = `pistol` / `submachine gun` / `pump shotgun` / `assault rifle`.
+
+### Cadáveres
+
+**`zombie_walker_dead.png`**
+```
+Same art style as the attached reference. Single game sprite, top-down view seen from directly above: a dead cartoon zombie with green skin and torn blue shirt lying face down on the ground, arms spread, facing right. Thick dark outline, flat cel shading. Centered, transparent background, no text.
+```
+
+**`zombie_runner_dead.png`**
+```
+Same art style as the attached reference. Single game sprite, top-down view seen from directly above: a dead skinny cartoon zombie with pale yellow-green skin and torn orange clothes lying face down on the ground, arms spread, facing right. Thick dark outline, flat cel shading. Centered, transparent background, no text.
+```
+
+**`zombie_tank_dead.png`**
+```
+Same art style as the attached reference. Single game sprite, top-down view seen from directly above: a dead huge bulky cartoon zombie with purple-gray skin and a metal armor plate on its back lying face down on the ground, massive arms spread, facing right. Thick dark outline, flat cel shading. Centered, transparent background, no text.
+```
