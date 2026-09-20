@@ -115,7 +115,7 @@ export class Effects {
   }
 
   /** Retroceso: el arma se echa atrás con fuerza y el cuerpo la acompaña un poco (posiciones locales del contenedor). */
-  recoil(body: Phaser.GameObjects.Image, gun: Phaser.GameObjects.Image, strength: number) {
+  recoil(body: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite, gun: Phaser.GameObjects.Image, strength: number) {
     const gunBase = (gun.getData("baseX") as number | undefined) ?? gun.x;
     gun.setData("baseX", gunBase);
     this.scene.tweens.killTweensOf([body, gun]);

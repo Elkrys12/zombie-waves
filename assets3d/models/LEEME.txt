@@ -1,0 +1,1 @@
+Modelos 3D (Kenney Blocky Characters "proto": CC0). Ver docs/pipeline-3d.md

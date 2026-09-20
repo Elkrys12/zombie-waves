@@ -1,8 +1,30 @@
 import Phaser from "phaser";
 import { generateTextures } from "../gfx/textures";
 
-/** Sprites de personaje (sin arma) por orden de entrada a la sala. */
-export const PLAYER_SPRITES = ["player_1_base", "player_2_base", "player_3_base", "player_4_base"] as const;
+/**
+ * Aspecto de cada jugador por orden de entrada. Si `sheet` existe, es un personaje 3D renderizado
+ * (hoja de sprites animada en assets/sprites); si no, se usa la imagen estática `image`.
+ */
+export const PLAYER_LOOKS: { image: string; sheet?: string }[] = [
+  { image: "player_1_base", sheet: "proto" },
+  { image: "player_2_base", sheet: "proto" },
+  { image: "player_3_base", sheet: "proto" },
+  { image: "player_4_base", sheet: "proto" },
+];
+
+/** Hojas de sprites animadas (renderizadas con tools/blender/render_sprites.py + tools/pack-sheet.mjs). */
+export const SHEETS = ["proto"];
+
+/** Píxeles del mundo por metro del modelo 3D: fija el tamaño de los personajes renderizados. */
+export const WORLD_PPM = 58;
+
+export interface SheetMeta {
+  frameWidth: number;
+  frameHeight: number;
+  ppm: number;
+  fps: number;
+  anims: Record<string, { start: number; end: number; loop: boolean }>;
+}
 
 /** Cómo se dibuja cada tipo de zombie: dónde está la cabeza (pivote) y su tamaño respecto al radio físico. */
 export const ZOMBIE_SPRITE: Record<string, { originX: number; originY: number; heightK: number }> = {
@@ -39,6 +61,10 @@ export class BootScene extends Phaser.Scene {
   preload() {
     this.load.setBaseURL(import.meta.env.BASE_URL);
     for (const key of ART) this.load.image(key, `assets/art/${key}.png`);
+    for (const key of SHEETS) {
+      this.load.json(`${key}_meta`, `assets/sprites/${key}.json`);
+      this.load.spritesheet(key, `assets/sprites/${key}.png`, { frameWidth: 128, frameHeight: 128 });
+    }
 
     const { width, height } = this.scale;
     const bar = this.add.rectangle(width / 2 - 120, height / 2, 0, 6, 0x7ed957).setOrigin(0, 0.5);
@@ -48,6 +74,18 @@ export class BootScene extends Phaser.Scene {
 
   create() {
     generateTextures(this);
+    // Animaciones de cada hoja: clave "<hoja>/<accion>"
+    for (const key of SHEETS) {
+      const meta = this.cache.json.get(`${key}_meta`) as SheetMeta;
+      for (const [name, a] of Object.entries(meta.anims)) {
+        this.anims.create({
+          key: `${key}/${name}`,
+          frames: this.anims.generateFrameNumbers(key, { start: a.start, end: a.end }),
+          frameRate: meta.fps,
+          repeat: a.loop ? -1 : 0,
+        });
+      }
+    }
     this.game.events.emit("assets-ready");
     this.scene.start("game");
   }

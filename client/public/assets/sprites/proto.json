@@ -1,0 +1,49 @@
+{
+  "frameWidth": 128,
+  "frameHeight": 128,
+  "columns": 7,
+  "ppm": 55,
+  "fps": 12,
+  "anims": {
+    "idle": {
+      "start": 0,
+      "end": 15,
+      "loop": true
+    },
+    "walk": {
+      "start": 16,
+      "end": 23,
+      "loop": true
+    },
+    "sprint": {
+      "start": 24,
+      "end": 29,
+      "loop": true
+    },
+    "holding-right": {
+      "start": 30,
+      "end": 31,
+      "loop": true
+    },
+    "holding-right-shoot": {
+      "start": 32,
+      "end": 34,
+      "loop": true
+    },
+    "holding-both": {
+      "start": 35,
+      "end": 36,
+      "loop": true
+    },
+    "holding-both-shoot": {
+      "start": 37,
+      "end": 39,
+      "loop": true
+    },
+    "die": {
+      "start": 40,
+      "end": 43,
+      "loop": false
+    }
+  }
+}
