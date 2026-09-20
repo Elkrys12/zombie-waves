@@ -76,14 +76,15 @@ export interface ZombieConfig {
   speed: number;
   damage: number;
   reward: number; // dinero al matarlo
-  radius: number;
+  radius: number; // radio físico (movimiento, contacto)
+  hitRadius: number; // radio para recibir disparos (acorde al tamaño visible del sprite)
   attackCooldown: number; // segundos entre ataques
 }
 
 export const ZOMBIES: Record<ZombieType, ZombieConfig> = {
-  walker: { hp: 50, speed: 80, damage: 10, reward: 10, radius: 16, attackCooldown: 1 },
-  runner: { hp: 30, speed: 180, damage: 8, reward: 15, radius: 12, attackCooldown: 0.7 },
-  tank: { hp: 300, speed: 50, damage: 30, reward: 50, radius: 26, attackCooldown: 1.5 },
+  walker: { hp: 50, speed: 80, damage: 10, reward: 10, radius: 16, hitRadius: 24, attackCooldown: 1 },
+  runner: { hp: 30, speed: 180, damage: 8, reward: 15, radius: 12, hitRadius: 19, attackCooldown: 0.7 },
+  tank: { hp: 300, speed: 50, damage: 30, reward: 50, radius: 26, hitRadius: 38, attackCooldown: 1.5 },
 };
 
 // ---- Oleadas ----

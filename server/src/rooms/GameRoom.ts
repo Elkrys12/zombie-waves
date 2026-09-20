@@ -346,28 +346,42 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     this.state.bullets.forEach((bullet: Bullet, id: string) => {
       const data = this.bulletData.get(id)!;
-      const step = Math.hypot(data.vx, data.vy) * dt;
-      bullet.x += data.vx * dt;
-      bullet.y += data.vy * dt;
+      const x0 = bullet.x, y0 = bullet.y;
+      const dx = data.vx * dt, dy = data.vy * dt;
+      const step = Math.hypot(dx, dy);
       data.remaining -= step;
 
-      if (data.remaining <= 0 || bullet.x < 0 || bullet.x > MAP_WIDTH || bullet.y < 0 || bullet.y > MAP_HEIGHT || pointBlocked(bullet.x, bullet.y)) {
+      // Colisión barrida: la bala avanza 30-45 px por tick, así que se comprueba todo el
+      // segmento recorrido (si no, "salta" por encima de zombies y muros finos).
+      // Se busca el impacto más cercano al origen, sea zombie o muro.
+      let hitT = Infinity;
+      let hitId: string | undefined;
+
+      this.state.zombies.forEach((zombie: Zombie, zid: string) => {
+        const t = segmentCircleHit(x0, y0, dx, dy, zombie.x, zombie.y, ZOMBIES[zombie.type as ZombieType].hitRadius + BULLET_RADIUS);
+        if (t !== null && t < hitT) { hitT = t; hitId = zid; }
+      });
+
+      // Muros: muestreo del segmento cada pocos píxeles
+      const samples = Math.max(1, Math.ceil(step / 6));
+      for (let i = 1; i <= samples; i++) {
+        const t = i / samples;
+        if (t >= hitT) break;
+        const sx = x0 + dx * t, sy = y0 + dy * t;
+        if (sx < 0 || sx > MAP_WIDTH || sy < 0 || sy > MAP_HEIGHT || pointBlocked(sx, sy)) { hitT = t; hitId = undefined; break; }
+      }
+
+      if (hitT <= 1) {
+        bullet.x = x0 + dx * hitT;
+        bullet.y = y0 + dy * hitT;
+        if (hitId) this.damageZombie(hitId, data.damage, bullet.ownerId);
         toRemove.push(id);
         return;
       }
 
-      // Colisión con el primer zombie que toque
-      let hitId: string | undefined;
-      this.state.zombies.forEach((zombie: Zombie, zid: string) => {
-        if (hitId) return;
-        const radius = ZOMBIES[zombie.type as ZombieType].radius + BULLET_RADIUS;
-        if (Math.hypot(zombie.x - bullet.x, zombie.y - bullet.y) <= radius) hitId = zid;
-      });
-
-      if (hitId) {
-        this.damageZombie(hitId, data.damage, bullet.ownerId);
-        toRemove.push(id);
-      }
+      bullet.x = x0 + dx;
+      bullet.y = y0 + dy;
+      if (data.remaining <= 0) toRemove.push(id);
     });
 
     for (const id of toRemove) {
@@ -521,4 +535,20 @@ export class GameRoom extends Room<{ state: GameState }> {
     player.hp = Math.max(0, player.hp - damage * (1 - reduction));
     if (player.hp <= 0) player.alive = false;
   }
+}
+
+/**
+ * Primer punto (0..1) del segmento P + t·D que entra en el círculo (cx, cy, r), o null si no lo toca.
+ */
+function segmentCircleHit(px: number, py: number, dxv: number, dyv: number, cx: number, cy: number, r: number): number | null {
+  const fx = px - cx, fy = py - cy;
+  const a = dxv * dxv + dyv * dyv;
+  const b = 2 * (fx * dxv + fy * dyv);
+  const c = fx * fx + fy * fy - r * r;
+  if (c <= 0) return 0; // ya está dentro
+  if (a === 0) return null;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return null;
+  const t = (-b - Math.sqrt(disc)) / (2 * a);
+  return t >= 0 && t <= 1 ? t : null;
 }
