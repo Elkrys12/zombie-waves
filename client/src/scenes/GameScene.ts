@@ -1,13 +1,14 @@
 import Phaser from "phaser";
 import type { NetworkManager } from "../net/NetworkManager";
 import { SoundManager } from "../audio/SoundManager";
-import { PLAYER_LOOKS, ZOMBIE_SPRITE, WEAPON_SIZE, WORLD_PPM, type SheetMeta } from "./BootScene";
+import { ZOMBIE_SPRITE, WEAPON_SIZE, WORLD_PPM, sheetMeta } from "./BootScene";
+import { gunHand } from "@zombie-waves/shared";
 import { CharacterFigure } from "../gfx/CharacterFigure";
 import { MapRenderer } from "../gfx/MapRenderer";
 import { Lighting, type LightSource } from "../gfx/Lighting";
 import { Effects } from "../gfx/Effects";
 import {
-  MAP_WIDTH, MAP_HEIGHT, PLAYER_RADIUS, GUN_SIDE_OFFSET, ZOMBIES, WEAPONS, pointBlocked,
+  MAP_WIDTH, MAP_HEIGHT, PLAYER_RADIUS, ZOMBIES, WEAPONS, MODELS, pointBlocked,
   type PlayerState, type ZombieState, type BulletState, type WeaponId, type WavePhase,
 } from "@zombie-waves/shared";
 
@@ -16,8 +17,7 @@ const MAX_DECALS = 60;
 
 interface PlayerView {
   root: Phaser.GameObjects.Container; // rota con el ángulo de apuntado
-  body: Phaser.GameObjects.Image | CharacterFigure;
-  sheet?: string; // hoja animada (personaje 3D renderizado) o undefined si es imagen estática
+  body: CharacterFigure;
   gun: Phaser.GameObjects.Image;
   name: Phaser.GameObjects.Text;
   hpBg: Phaser.GameObjects.Rectangle;
@@ -58,7 +58,6 @@ export class GameScene extends Phaser.Scene {
   private lightningLeft = 0;   // segundos que quedan de destello
   private lamps: { x: number; y: number }[] = [];
   private keys!: Record<"W" | "A" | "S" | "D" | "UP" | "DOWN" | "LEFT" | "RIGHT", Phaser.Input.Keyboard.Key>;
-  private colorIndex = 0;
   private synced = false; // true tras el primer frame: los zombies ya existentes no "nacen" animados
 
   constructor() {
@@ -107,30 +106,25 @@ export class GameScene extends Phaser.Scene {
 
     $(state).players.onAdd((player: PlayerState, id: string) => {
       const isMe = id === this.net.sessionId;
-      // Sprite propio: la cabeza (pivote de giro) está a ~1/3 del ancho; el arma sobresale a la derecha
-      const look = PLAYER_LOOKS[this.colorIndex++ % PLAYER_LOOKS.length];
-      let body: Phaser.GameObjects.Image | CharacterFigure;
-      let baseScale: number;
-      if (look.sheet) {
-        // Personaje 3D renderizado por capas: el frame está centrado en la raíz del modelo
-        const meta = this.cache.json.get(`${look.sheet}_meta`) as SheetMeta;
-        const figure = new CharacterFigure(this, look.sheet);
-        figure.setAppearance(player);
-        body = figure;
-        baseScale = WORLD_PPM / meta.ppm;
-        // La apariencia puede cambiar en el lobby: se vuelve a aplicar al cambiar cualquier campo
-        for (const field of ["skin", "shirt", "pants", "hair", "hat", "glasses"] as const) {
-          $(player).listen(field, () => figure.setAppearance(player));
-        }
-      } else {
-        body = this.add.image(0, 0, look.image).setOrigin(0.3, 0.5);
-        baseScale = (PLAYER_RADIUS * 3.4) / body.height;
+      // Personaje 3D renderizado por capas (el frame está centrado en la raíz del modelo); la escala
+      // depende de los píxeles por metro de cada hoja
+      const sheetOf = () => MODELS[player.model]?.id ?? MODELS[0].id;
+      const body = new CharacterFigure(this, sheetOf());
+      body.setAppearance(player);
+      const fit = () => {
+        const base = WORLD_PPM / sheetMeta(this, body.sheet).ppm;
+        body.setScale(base).setData("base", base);
+      };
+      fit();
+      // La apariencia puede cambiar en el lobby: se vuelve a aplicar al cambiar cualquier campo
+      $(player).listen("model", () => { body.setSheet(sheetOf()); fit(); });
+      for (const field of ["skin", "shirt", "pants", "hair", "hat", "glasses"] as const) {
+        $(player).listen(field, () => body.setAppearance(player));
       }
-      body.setScale(baseScale).setData("base", baseScale);
-      // Arma como capa aparte, DEBAJO del cuerpo y alineada con el brazo derecho: la culata queda bajo
-      // la mano (que se dibuja encima) y el cañón sobresale hacia delante
-      const handX = look.sheet ? 0.36 * WORLD_PPM : (body as Phaser.GameObjects.Image).displayWidth * 0.5;
-      const gun = this.add.image(handX, GUN_SIDE_OFFSET, `weapon_${player.weapon}`).setOrigin(0.22, 0.5);
+      // Arma como capa aparte, DEBAJO del cuerpo y en el punto donde el modelo la sujeta: la culata
+      // queda bajo las manos (que se dibujan encima) y el cañón sobresale hacia delante
+      const hand = gunHand(player.model, player.weapon);
+      const gun = this.add.image(hand.x, hand.y, `weapon_${player.weapon}`).setOrigin(0.22, 0.5).setData("baseX", hand.x);
       gun.setScale(WEAPON_SIZE[player.weapon] / gun.height);
       const shadow = this.add.ellipse(2, 5, PLAYER_RADIUS * 3, PLAYER_RADIUS * 2.6, 0x000000, 0.35);
       const root = this.add.container(player.x, player.y, [shadow, gun, body]).setDepth(10);
@@ -138,7 +132,7 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(0.5, 1).setDepth(12);
       const hpBg = this.add.rectangle(0, 0, 40, 5, 0x000000, 0.6).setDepth(12);
       const hpBar = this.add.rectangle(0, 0, 40, 5, 0x7ed957).setOrigin(0, 0.5).setDepth(13);
-      this.players.set(id, { root, body, sheet: look.sheet, gun, name, hpBg, hpBar, lastX: player.x, lastY: player.y, moving: false });
+      this.players.set(id, { root, body, gun, name, hpBg, hpBar, lastX: player.x, lastY: player.y, moving: false });
 
       if (isMe) {
         // ?cam=x,y (pruebas): cámara fija en un punto del mapa en vez de seguir al jugador
@@ -258,7 +252,8 @@ export class GameScene extends Phaser.Scene {
       const kick = weapon.bulletsPerShot > 1 ? 9 : weapon.damage > 30 ? 7 : 4;
       this.fx.recoil(view.body, view.gun, kick);
       const side = owner.angle + Math.PI / 2;
-      this.fx.casing(view.root.x + Math.cos(owner.angle) * 26 + Math.cos(side) * GUN_SIDE_OFFSET, view.root.y + Math.sin(owner.angle) * 26 + Math.sin(side) * GUN_SIDE_OFFSET, owner.angle);
+      const handY = gunHand(owner.model, owner.weapon).y;
+      this.fx.casing(view.root.x + Math.cos(owner.angle) * 26 + Math.cos(side) * handY, view.root.y + Math.sin(owner.angle) * 26 + Math.sin(side) * handY, owner.angle);
       if (bullet.ownerId === this.net.sessionId) this.cameras.main.shake(70, kick * 0.0006);
     }
   }
@@ -368,25 +363,20 @@ export class GameScene extends Phaser.Scene {
       view.root.setRotation(player.angle);
       view.root.setAlpha(player.alive ? 1 : 0.35);
 
-      const base = view.body.getData("base") as number;
-      if (view.sheet && view.body instanceof CharacterFigure) {
-        // Personaje animado: elegir la animación según lo que hace
-        const oneHand = player.weapon === "pistol";
-        const shooting = time - ((view.root.getData("lastShot") as number | undefined) ?? -9999) < 220;
-        let anim: string;
-        if (!player.alive) anim = "die";
-        else if (shooting) anim = oneHand ? "holding-right-shoot" : "holding-both-shoot";
-        else if (view.moving) anim = "walk";
-        else anim = oneHand ? "holding-right" : "holding-both";
-        view.body.play(anim);
-        view.body.setScale(base);
-        // Con pistola el arma va en la mano derecha; con dos manos, centrada entre ambas
-        view.gun.y = oneHand ? GUN_SIDE_OFFSET : 0;
-      } else {
-        // Imagen estática: balanceo al andar y respiración en reposo
-        const bob = !player.alive ? 1 : view.moving ? 1 + Math.sin(time / 60) * 0.05 : 1 + Math.sin(time / 420) * 0.015;
-        view.body.setScale(base * bob, base * (2 - bob));
-      }
+      // Personaje animado: elegir la animación según lo que hace
+      const oneHand = player.weapon === "pistol";
+      const shooting = time - ((view.root.getData("lastShot") as number | undefined) ?? -9999) < 220;
+      let anim: string;
+      if (!player.alive) anim = "die";
+      else if (shooting) anim = oneHand ? "holding-right-shoot" : "holding-both-shoot";
+      else if (view.moving) anim = "walk";
+      else anim = oneHand ? "holding-right" : "holding-both";
+      view.body.play(anim);
+      view.body.setScale(view.body.getData("base") as number);
+      // El arma sigue a la mano del modelo (distinta con pistola y con arma larga)
+      const hand = gunHand(player.model, player.weapon);
+      view.gun.y = hand.y;
+      if (view.gun.getData("baseX") !== hand.x) view.gun.setData("baseX", hand.x).setX(hand.x); // (x lo anima el retroceso)
 
       // Arma equipada (cambia al comprar) y visible solo en vida
       const gunKey = `weapon_${player.weapon}`;

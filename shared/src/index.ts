@@ -12,9 +12,14 @@ export const TICK_RATE = 20; // simulaciones por segundo en el servidor
 export const PLAYER_BASE_SPEED = 200; // px/s
 export const PLAYER_BASE_HP = 100;
 export const PLAYER_RADIUS = 16;
-/** El arma va en la mano derecha: desplazamiento lateral (perpendicular al apuntado) del cañón. */
-export const GUN_SIDE_OFFSET = 14;
+/** Boca del arma respecto al jugador (px del mundo): adelantada y desplazada hacia la mano (ver MODELS.hand). */
 export const GUN_FORWARD_OFFSET = 40;
+
+/** Punto donde el modelo sujeta el arma, en px del mundo: x hacia delante, y hacia su derecha. */
+export function gunHand(model: number, weapon: string) {
+  const hand = (MODELS[model] ?? MODELS[0]).hand;
+  return { x: hand.x, y: weapon === "pistol" ? hand.pistolY : hand.rifleY };
+}
 
 // ---- Armas ----
 export type WeaponId = "pistol" | "smg" | "shotgun" | "rifle";
@@ -96,8 +101,17 @@ export const CLOTH_COLORS = [0xd9532b, 0x2f80ed, 0x27ae60, 0xf2c94c, 0x9b51e0, 0
 export const HAIR_COLORS = [0x2b1b0e, 0x5a3a1e, 0xd9a35a, 0xc0392b, 0x9e9e9e, 0x1a1a1a, 0xf5f5f5, 0x7e57c2];
 export const HATS = ["none", "cap"] as const;
 export const GLASSES = ["none", "glasses"] as const;
+/**
+ * Personajes base (hojas de sprites en client/public/assets/sprites/<id>.json). `hand`: dónde
+ * sujeta el arma (px del mundo; x adelante, y a su derecha) con pistola y con arma larga.
+ */
+export const MODELS: { id: string; name: string; hand: { x: number; pistolY: number; rifleY: number } }[] = [
+  { id: "soldado", name: "Soldado", hand: { x: 23, pistolY: 1, rifleY: 5 } },
+  { id: "proto", name: "Prototipo", hand: { x: 24, pistolY: 16, rifleY: 0 } },
+];
 
 export interface Appearance {
+  model: number;  // índice en MODELS
   skin: number;   // índice en SKIN_TONES
   shirt: number;  // índice en CLOTH_COLORS
   pants: number;  // índice en CLOTH_COLORS
@@ -106,13 +120,14 @@ export interface Appearance {
   glasses: string; // GLASSES
 }
 
-export const DEFAULT_APPEARANCE: Appearance = { skin: 0, shirt: 1, pants: 6, hair: 0, hat: "none", glasses: "none" };
+export const DEFAULT_APPEARANCE: Appearance = { model: 0, skin: 0, shirt: 1, pants: 6, hair: 0, hat: "none", glasses: "none" };
 
 /** Normaliza lo que manda el cliente: índices dentro de rango y nombres válidos. */
 export function sanitizeAppearance(a: Partial<Appearance> | undefined): Appearance {
   const idx = (v: unknown, n: number, d: number) => (Number.isInteger(v) && (v as number) >= 0 && (v as number) < n ? (v as number) : d);
   const pick = (v: unknown, list: readonly string[], d: string) => (typeof v === "string" && list.includes(v) ? v : d);
   return {
+    model: idx(a?.model, MODELS.length, DEFAULT_APPEARANCE.model),
     skin: idx(a?.skin, SKIN_TONES.length, DEFAULT_APPEARANCE.skin),
     shirt: idx(a?.shirt, CLOTH_COLORS.length, DEFAULT_APPEARANCE.shirt),
     pants: idx(a?.pants, CLOTH_COLORS.length, DEFAULT_APPEARANCE.pants),

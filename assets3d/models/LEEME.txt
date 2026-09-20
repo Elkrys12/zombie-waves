@@ -1,1 +1,5 @@
-Modelos 3D (Kenney Blocky Characters "proto": CC0). Ver docs/pipeline-3d.md
+Modelos 3D (ver docs/pipeline-3d.md):
+- proto.glb: Kenney "Blocky Characters" (CC0).
+- personaje.fbx: soldado "CABAS_HANSEL" (Sketchfab, malla única con textura) riggeado en Mixamo;
+  animaciones en ../anims/personaje/. Textura de color en personaje_tex/personaje_color_2k.png.
+  Los originales (zip de Sketchfab, GLB fuente, texturas 4K) no se versionan.

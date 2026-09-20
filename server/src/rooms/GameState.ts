@@ -14,6 +14,7 @@ export const Player = schema({
   kills: t.number().default(0),
 
   // Apariencia (ver Appearance en shared)
+  model: t.uint8().default(0),
   skin: t.uint8().default(0),
   shirt: t.uint8().default(1),
   pants: t.uint8().default(6),

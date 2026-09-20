@@ -136,6 +136,12 @@ node tools/process-art.mjs          # quita el fondo, recorta, reduce y guarda e
 node tools/process-art.mjs zombie_walker player_1   # solo algunos
 ```
 
+Los personajes jugables son modelos 3D animados (Mixamo) convertidos a hojas de sprites por capas con Blender en modo consola: `node assets3d/render.mjs` (ver [docs/pipeline-3d.md](docs/pipeline-3d.md)). En el lobby se elige el personaje y sus colores.
+
+### Créditos de modelos 3D
+- **Prototipo**: Kenney *Blocky Characters* (CC0).
+- **Soldado**: modelo "CABAS_HANSEL" de Sketchfab (autor y licencia: pendiente de anotar), riggeado con Mixamo.
+
 ## Roadmap
 
 - [x] Mapa grande con zonas (barrio, plaza, parque, aparcamiento, almacén, campo), obstáculos con colisión y balas bloqueadas por muros
@@ -147,7 +153,7 @@ node tools/process-art.mjs zombie_walker player_1   # solo algunos
 - [x] Zombies con IA básica y oleadas (walker, runner, tank)
 - [x] Sistema de vida, muerte y reaparición
 - [x] Dinero y tienda de mejoras (armas, chaleco, velocidad, daño, cadencia, vida)
-- [x] Lobby: crear sala privada, unirse por código o enlace, anfitrión inicia, personalización del personaje (piel, camiseta, pantalón, pelo, gorra, gafas)
+- [x] Lobby: crear sala privada, unirse por código o enlace, anfitrión inicia, personalización del personaje (personaje base, colores de ropa/piel/pelo, gorra, gafas según el modelo)
 - [x] Sprites procedurales, animaciones, efectos y sonido sintetizado (M para silenciar)
 - [x] HUD (vida, oleada, dinero, arma, marcador)
 - [x] Despliegue: cliente en GitHub Pages (automático) + servidor en Render (Dockerfile + blueprint)

@@ -1,30 +1,26 @@
 import Phaser from "phaser";
+import { MODELS } from "@zombie-waves/shared";
 import { generateTextures } from "../gfx/textures";
 
-/**
- * Aspecto de cada jugador por orden de entrada. Si `sheet` existe, es un personaje 3D renderizado
- * (hoja de sprites animada en assets/sprites); si no, se usa la imagen estática `image`.
- */
-export const PLAYER_LOOKS: { image: string; sheet?: string }[] = [
-  { image: "player_1_base", sheet: "proto" },
-  { image: "player_2_base", sheet: "proto" },
-  { image: "player_3_base", sheet: "proto" },
-  { image: "player_4_base", sheet: "proto" },
-];
-
-/** Hojas de sprites animadas (renderizadas con tools/blender/render_sprites.py + tools/pack-sheet.mjs). */
-export const SHEETS = ["proto"];
+/** Hojas de sprites animadas (renderizadas con assets3d/render.mjs): una por personaje base. */
+export const SHEETS: string[] = MODELS.map((m) => m.id);
 
 /** Píxeles del mundo por metro del modelo 3D: fija el tamaño de los personajes renderizados. */
-export const WORLD_PPM = 58;
+export const WORLD_PPM = 68;
 
 export interface SheetMeta {
   frameWidth: number;
   frameHeight: number;
   ppm: number;
   fps: number;
+  extent?: number; // radio (px) que ocupa el personaje en el frame, como mucho
   anims: Record<string, { start: number; end: number; loop: boolean }>;
-  layers?: { name: string; tintable: boolean }[];
+  layers?: { name: string; tintable: boolean; optional?: boolean }[];
+}
+
+/** Metadatos de una hoja ya cargada. */
+export function sheetMeta(scene: Phaser.Scene, sheet: string): SheetMeta {
+  return scene.cache.json.get(`${sheet}_meta`) as SheetMeta;
 }
 
 /** Texturas (hojas PNG) de un personaje: una por capa, o una sola si no tiene capas. */

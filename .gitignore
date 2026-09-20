@@ -26,3 +26,10 @@ desktop.ini
 # Imágenes originales generadas con IA (pesadas; las procesadas están en client/public/assets/art)
 client/public/assets/custom/
 assets3d/renders/
+
+# Modelos 3D: originales pesados (zip de Sketchfab, GLB fuente, texturas 4K); se versionan solo el FBX
+# riggeado, las animaciones y la textura de color a 2K que usa el render
+assets3d/models/*.zip
+assets3d/models/*_src/
+assets3d/models/personaje_tex/*
+!assets3d/models/personaje_tex/personaje_color_2k.png

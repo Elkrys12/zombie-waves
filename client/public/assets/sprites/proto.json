@@ -4,6 +4,7 @@
   "columns": 7,
   "ppm": 55,
   "fps": 12,
+  "extent": 86,
   "anims": {
     "idle": {
       "start": 0,

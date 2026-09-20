@@ -13,12 +13,27 @@ Uso (modo consola de Blender):
   --step    renderizar 1 de cada N frames de la animación
   --fps     fps de reproducción que se escribe en meta.json
   --outline grosor del contorno negro (Freestyle) en píxeles
+  --lines   "full" (silueta + bordes + aristas marcadas + cambios de material; para modelos low-poly)
+            o "silhouette" (solo silueta) o "none" (sin Freestyle: para mallas densas, donde las líneas lo
+            ennegrecen todo; el contorno lo añade después tools/pack-sheet.mjs con --outline)
+  --gamma   curva sobre el color base de los materiales no tintables (0.6 aclara texturas muy oscuras)
   --anims   carpeta con un FBX por animación (flujo Mixamo: "sin piel"); cada archivo se convierte
             en una acción con el nombre del archivo (walk.fbx -> walk) aplicada a la armadura del modelo
-  --layers  render por capas para personalización: "capa=obj1,obj2[:white];capa2=..."; cada capa se
-            renderiza sola (el resto oculto) en <out>/<capa>/. Con ":white" el material pasa a blanco
-            para poder tintarla en el juego (piel, camiseta, pantalón, pelo).
+  --layers  render por capas para personalización: "capa=obj1,obj2[:white|:tint][:optional];capa2=...";
+            cada capa se renderiza en <out>/<capa>/ con el resto de capas como "holdout" (recortan pero
+            no se ven), así las capas encajan como el render completo. ":white" pone el material en
+            blanco liso y ":tint" deja la textura en gris claro; ambas se tintan en el juego (piel,
+            camiseta, pantalón, pelo). ":optional" marca accesorios que el jugador puede quitar (gorra,
+            gafas): no recortan a las demás capas.
   --extras  "blocky": añade pelo, gorra y gafas de primitivas al modelo (para el prototipo de Kenney)
+  --height  altura del personaje en metros (reescala el modelo; arregla FBX exportados en cm)
+  --normals "recalc": descarta las normales del archivo y las recalcula hacia fuera (mallas de
+            Sketchfab/Mixamo que llegan con normales rotas y se renderizan en sombra)
+  --texture imagen de color base para las mallas sin textura (FBX de Mixamo que perdió la textura)
+  --split   separa la malla única por huesos: "parte=Hueso1,Hueso2*;parte2=..." (cada cara va a la
+            parte del hueso que más pesa en sus vértices; el resto queda en "rest"). Los nombres se
+            comparan sin el prefijo "mixamorig:" y admiten "*" al final. Las partes son objetos nuevos
+            que se pueden usar en --layers.
 
 Salida: <out>/<accion>_0001.png ... y <out>/meta.json con frames por acción, fps y escala.
 """
@@ -32,14 +47,14 @@ import sys
 
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    opts = {"actions": None, "yaw": 0.0, "ppm": 110.0, "size": 256, "step": 1, "fps": 12, "outline": 2.5, "light_yaw": -35.0}
+    opts = {"actions": None, "yaw": 0.0, "ppm": 110.0, "size": 256, "step": 1, "fps": 12, "outline": 2.5, "light_yaw": -35.0, "lines": "full", "gamma": 1.0}
     i = 0
     while i < len(argv):
         k = argv[i].lstrip("-")
         v = argv[i + 1] if i + 1 < len(argv) else None
         if k == "actions":
             opts["actions"] = [a.strip() for a in v.split(",") if a.strip()]
-        elif k in ("yaw", "ppm", "outline", "light_yaw"):
+        elif k in ("yaw", "ppm", "outline", "light_yaw", "height", "gamma"):
             opts[k] = float(v)
         elif k in ("size", "step", "fps"):
             opts[k] = int(v)
@@ -49,9 +64,17 @@ def parse_args():
                 if not part.strip():
                     continue
                 lname, rest = part.split("=", 1)
-                white = rest.endswith(":white")
-                objs = [o.strip() for o in rest.replace(":white", "").split(",") if o.strip()]
-                opts["layers"].append({"name": lname.strip(), "objects": objs, "white": white})
+                flags = rest.split(":")
+                objs = [o.strip() for o in flags[0].split(",") if o.strip()]
+                mode = "white" if "white" in flags else ("tint" if "tint" in flags else None)
+                opts["layers"].append({"name": lname.strip(), "objects": objs, "mode": mode, "optional": "optional" in flags})
+        elif k == "split":
+            opts["split"] = []
+            for part in v.split(";"):
+                if not part.strip():
+                    continue
+                pname, bones = part.split("=", 1)
+                opts["split"].append((pname.strip(), [b.strip() for b in bones.split(",") if b.strip()]))
         else:
             opts[k] = v
         i += 2
@@ -82,6 +105,9 @@ def import_anim_folder(dirpath):
         raise SystemExit("--anims requiere que el modelo tenga armadura")
     if base.animation_data is None:
         base.animation_data_create()
+    # Las acciones que traía el modelo (la T-pose de Mixamo) no son animaciones del juego
+    for a in bpy.data.actions:
+        a.name = "_base_" + a.name
     for f in sorted(os.listdir(dirpath)):
         if not f.lower().endswith(".fbx"):
             continue
@@ -110,7 +136,7 @@ def available_actions():
             if t.name not in names:
                 names.append(t.name)
     if not names:
-        names = [a.name for a in bpy.data.actions]
+        names = [a.name for a in bpy.data.actions if not a.name.startswith("_base_")]
     return names
 
 
@@ -191,7 +217,7 @@ def setup_scene(opts):
         bg.inputs[1].default_value = 0.35
 
     # Contornos negros
-    scene.render.use_freestyle = True
+    scene.render.use_freestyle = opts.get("lines") != "none"
     scene.render.line_thickness_mode = "ABSOLUTE"
     scene.render.line_thickness = opts["outline"]
     vl = bpy.context.view_layer
@@ -202,11 +228,19 @@ def setup_scene(opts):
         fs.linesets.remove(ls)
     ls = fs.linesets.new("outline")
     ls.select_silhouette = True
-    ls.select_border = True
-    ls.select_crease = True
-    ls.select_material_boundary = True
+    dense = opts.get("lines") == "silhouette"
+    ls.select_border = not dense
+    ls.select_crease = not dense
+    ls.select_material_boundary = not dense
     ls.linestyle.color = (0.04, 0.03, 0.05)
     ls.linestyle.thickness = opts["outline"]
+    if opts.get("layers"):
+        # Solo contornos de los objetos de la capa que se renderiza (el resto son holdout)
+        col = bpy.data.collections.new("LayerObjects")
+        scene.collection.children.link(col)
+        ls.select_by_collection = True
+        ls.collection = col
+        ls.collection_negation = "INCLUSIVE"
 
 
 def add_blocky_extras():
@@ -248,6 +282,165 @@ def add_blocky_extras():
     print("[extras] pelo, gorra y gafas añadidos")
 
 
+def mesh_bounds():
+    """Caja (min, max) en coordenadas de mundo de todas las mallas."""
+    import mathutils
+    mn = mathutils.Vector((1e9,) * 3)
+    mx = mathutils.Vector((-1e9,) * 3)
+    for o in bpy.data.objects:
+        if o.type != "MESH":
+            continue
+        for corner in o.bound_box:
+            w = o.matrix_world @ mathutils.Vector(corner)
+            mn = mathutils.Vector(map(min, mn, w))
+            mx = mathutils.Vector(map(max, mx, w))
+    return mn, mx
+
+
+def normalize_height(height):
+    """Escala los objetos raíz para que el personaje mida `height` metros (FBX en cm, etc.)."""
+    bpy.context.view_layer.update()
+    mn, mx = mesh_bounds()
+    cur = mx.z - mn.z
+    if cur <= 0:
+        return
+    f = height / cur
+    for o in bpy.data.objects:
+        if o.parent is None:
+            o.scale = tuple(s * f for s in o.scale)
+    bpy.context.view_layer.update()
+    print(f"[height] {cur:.4f} m -> {height} m (x{f:.2f})")
+
+
+def fix_normals():
+    """Normales limpias: sin normales personalizadas, caras hacia fuera, suavizado por ángulo."""
+    for o in bpy.data.objects:
+        if o.type != "MESH":
+            continue
+        bpy.ops.object.select_all(action="DESELECT")
+        o.select_set(True)
+        bpy.context.view_layer.objects.active = o
+        if hasattr(o.data, "has_custom_normals") and o.data.has_custom_normals:
+            bpy.ops.mesh.customdata_custom_splitnormals_clear()
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.mesh.normals_make_consistent(inside=False)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(45))
+        print(f"[normals] {o.name}: recalculadas")
+
+
+def apply_texture(path):
+    """Material con esa imagen como color base para las mallas que no tengan textura."""
+    img = bpy.data.images.load(path)
+    mat = bpy.data.materials.new("BaseTexture")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = img
+    nt.links.new(tex.outputs["Color"], nt.nodes["Principled BSDF"].inputs["Base Color"])
+    for o in bpy.data.objects:
+        if o.type != "MESH":
+            continue
+        has_tex = any(m and m.use_nodes and any(n.type == "TEX_IMAGE" and n.image for n in m.node_tree.nodes) for m in o.data.materials)
+        if not has_tex:
+            o.data.materials.clear()
+            o.data.materials.append(mat)
+            print(f"[texture] {o.name} <- {os.path.basename(path)}")
+
+
+def _bone_matches(group_name, patterns):
+    short = group_name.split(":")[-1]
+    for p in patterns:
+        if p.endswith("*"):
+            if short.startswith(p[:-1]):
+                return True
+        elif short == p:
+            return True
+    return False
+
+
+def split_by_bones(spec):
+    """Separa cada malla con pesos en objetos por parte (según el hueso dominante de cada cara)."""
+    import bmesh
+    meshes = [o for o in bpy.data.objects if o.type == "MESH" and o.vertex_groups]
+    for obj in meshes:
+        base_name = obj.name
+        for pname, patterns in spec:
+            # Parte de cada vértice: su grupo de más peso, si coincide con la lista de huesos
+            part_groups = {g.index for g in obj.vertex_groups if _bone_matches(g.name, patterns)}
+            if not part_groups:
+                continue
+            in_part = []
+            for v in obj.data.vertices:
+                best = max(v.groups, key=lambda g: g.weight, default=None)
+                in_part.append(best is not None and best.group in part_groups)
+            bpy.ops.object.select_all(action="DESELECT")
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.mode_set(mode="EDIT")
+            bm = bmesh.from_edit_mesh(obj.data)
+            count = 0
+            for f in bm.faces:
+                votes = sum(1 for v in f.verts if in_part[v.index])
+                f.select = votes * 2 > len(f.verts)
+                count += f.select
+            bm.select_flush_mode()
+            bmesh.update_edit_mesh(obj.data)
+            if count == 0 or count == len(bm.faces):
+                bpy.ops.object.mode_set(mode="OBJECT")
+                if count:
+                    obj.name = pname
+                print(f"[split] {pname}: {count} caras (sin separar)")
+                continue
+            bpy.ops.mesh.separate(type="SELECTED")
+            bpy.ops.object.mode_set(mode="OBJECT")
+            new = next(o for o in bpy.context.selected_objects if o != obj)
+            new.name = pname
+            print(f"[split] {pname}: {count} caras")
+        if obj.name == base_name:
+            obj.name = "rest"
+
+
+def tint_objects(names):
+    """Deja la textura en gris claro (conserva costuras y detalles) para tintarla en el juego."""
+    for n in names:
+        o = bpy.data.objects.get(n)
+        if o is None or o.type != "MESH":
+            continue
+        for i, m in enumerate(o.data.materials):
+            if m is None:
+                continue
+            mat = m.copy()
+            mat.name = f"Tint_{n}_{i}"
+            nt = mat.node_tree
+            principled = next((x for x in nt.nodes if x.type == "BSDF_PRINCIPLED"), None)
+            if principled is None:
+                continue
+            src = principled.inputs["Base Color"]
+            if not src.is_linked:
+                src.default_value = (1, 1, 1, 1)
+                o.data.materials[i] = mat
+                continue
+            color_out = src.links[0].from_socket
+            # gris = 0.72 + 0.28 * lum^0.5: casi blanco, con los detalles como sombras suaves
+            bw = nt.nodes.new("ShaderNodeRGBToBW")
+            powr = nt.nodes.new("ShaderNodeMath")
+            powr.operation = "POWER"
+            powr.inputs[1].default_value = 0.5
+            mul = nt.nodes.new("ShaderNodeMath")
+            mul.operation = "MULTIPLY_ADD"
+            mul.inputs[1].default_value = 0.28
+            mul.inputs[2].default_value = 0.72
+            nt.links.new(color_out, bw.inputs["Color"])
+            nt.links.new(bw.outputs["Val"], powr.inputs[0])
+            nt.links.new(powr.outputs["Value"], mul.inputs[0])
+            for l in list(src.links):
+                nt.links.remove(l)
+            nt.links.new(mul.outputs["Value"], src)
+            o.data.materials[i] = mat
+
+
 def whiten_objects(names):
     """Sustituye los materiales de esos objetos por blanco liso (base tintable en el juego)."""
     white = bpy.data.materials.new("LayerWhite")
@@ -261,7 +454,7 @@ def whiten_objects(names):
         o.data.materials.append(white)
 
 
-def toonify_materials():
+def toonify_materials(gamma=1.0):
     """Convierte cada material en sombreado plano por pasos (cel shading) conservando su color base."""
     for mat in bpy.data.materials:
         if not mat.use_nodes:
@@ -306,6 +499,12 @@ def toonify_materials():
         nt.links.new(diffuse.outputs["BSDF"], to_rgb.inputs["Shader"])
         nt.links.new(to_rgb.outputs["Color"], ramp.inputs["Fac"])
         nt.links.new(ramp.outputs["Color"], mult.inputs[6])  # A
+        if base_link is not None and gamma != 1.0 and not mat.name.startswith(("Tint_", "LayerWhite")):
+            # Aclarar texturas oscuras: color^gamma
+            gam = nt.nodes.new("ShaderNodeGamma")
+            gam.inputs["Gamma"].default_value = gamma
+            nt.links.new(base_link, gam.inputs["Color"])
+            base_link = gam.outputs["Color"]
         if base_link is not None:
             nt.links.new(base_link, mult.inputs[7])  # B
         else:
@@ -343,12 +542,22 @@ def orient_model(yaw_deg):
 
 # ------------------------------------------------------------------ render
 
-def set_layer_visibility(layer):
-    """Deja visibles para el render solo los objetos de la capa (None = todos)."""
+def set_layer_visibility(layer, layers):
+    """Capa a renderizar visible; las demás capas fijas como holdout (recortan sin verse);
+    los accesorios opcionales de otras capas, ocultos."""
+    col = bpy.data.collections.get("LayerObjects")
+    optional = {n for l in layers if l["optional"] and l is not layer for n in l["objects"]}
     for o in bpy.data.objects:
         if o.type != "MESH":
             continue
-        o.hide_render = layer is not None and o.name not in layer["objects"]
+        mine = o.name in layer["objects"]
+        o.hide_render = (not mine) and o.name in optional
+        o.is_holdout = not mine
+        if col is not None:
+            if mine and o.name not in col.objects:
+                col.objects.link(o)
+            elif not mine and o.name in col.objects:
+                col.objects.unlink(o)
 
 
 def render_all(opts):
@@ -357,10 +566,10 @@ def render_all(opts):
         render_pass(opts, opts["out"], None)
         return
     for layer in layers:
-        set_layer_visibility(layer)
+        set_layer_visibility(layer, layers)
         render_pass(opts, os.path.join(opts["out"], layer["name"]), layer)
     with open(os.path.join(opts["out"], "layers.json"), "w", encoding="utf-8") as fh:
-        json.dump([{"name": l["name"], "tintable": l["white"]} for l in layers], fh, indent=2)
+        json.dump([{"name": l["name"], "tintable": l["mode"] is not None, "optional": l["optional"]} for l in layers], fh, indent=2)
 
 
 def render_pass(opts, out, layer):
@@ -402,12 +611,27 @@ if __name__ == "__main__":
     load_model(opts["model"])
     if opts.get("anims"):
         import_anim_folder(opts["anims"])
+    if opts.get("height"):
+        normalize_height(opts["height"])
+    if opts.get("normals") == "recalc":
+        fix_normals()
+    if opts.get("texture"):
+        apply_texture(opts["texture"])
+    if opts.get("split"):
+        split_by_bones(opts["split"])
     if opts.get("extras") == "blocky":
         add_blocky_extras()
     for layer in opts.get("layers") or []:
-        if layer["white"]:
+        if layer["mode"] == "white":
             whiten_objects(layer["objects"])
+        elif layer["mode"] == "tint":
+            tint_objects(layer["objects"])
+    for l in opts.get("layers") or []:
+        print(f"[layers] {l['name']}:", {n: [m.name for m in bpy.data.objects[n].data.materials] for n in l["objects"] if n in bpy.data.objects})
+    missing = [n for l in opts.get("layers") or [] for n in l["objects"] if n not in bpy.data.objects]
+    if missing:
+        print("[layers] objetos no encontrados:", missing, "· existen:", [o.name for o in bpy.data.objects if o.type == "MESH"])
     setup_scene(opts)
-    toonify_materials()
+    toonify_materials(opts["gamma"])
     orient_model(opts["yaw"])
     render_all(opts)

@@ -1,0 +1,77 @@
+{
+  "frameWidth": 128,
+  "frameHeight": 128,
+  "columns": 19,
+  "ppm": 55,
+  "fps": 12,
+  "extent": 66,
+  "anims": {
+    "idle": {
+      "start": 0,
+      "end": 59,
+      "loop": true
+    },
+    "walk": {
+      "start": 60,
+      "end": 77,
+      "loop": true
+    },
+    "sprint": {
+      "start": 78,
+      "end": 87,
+      "loop": true
+    },
+    "holding-right": {
+      "start": 88,
+      "end": 212,
+      "loop": true
+    },
+    "holding-right-shoot": {
+      "start": 213,
+      "end": 230,
+      "loop": true
+    },
+    "holding-both": {
+      "start": 231,
+      "end": 262,
+      "loop": true
+    },
+    "holding-both-shoot": {
+      "start": 263,
+      "end": 282,
+      "loop": true
+    },
+    "die": {
+      "start": 283,
+      "end": 325,
+      "loop": false
+    }
+  },
+  "layers": [
+    {
+      "name": "feet",
+      "tintable": false,
+      "optional": false
+    },
+    {
+      "name": "pants",
+      "tintable": true,
+      "optional": false
+    },
+    {
+      "name": "shirt",
+      "tintable": true,
+      "optional": false
+    },
+    {
+      "name": "hands",
+      "tintable": false,
+      "optional": false
+    },
+    {
+      "name": "head",
+      "tintable": false,
+      "optional": false
+    }
+  ]
+}

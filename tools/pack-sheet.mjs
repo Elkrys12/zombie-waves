@@ -3,12 +3,14 @@
  * Empaqueta los frames renderizados por Blender (tools/blender/render_sprites.py) en una hoja de
  * sprites uniforme + JSON de animaciones para Phaser.
  *
- * Uso: node tools/pack-sheet.mjs <carpeta-frames> <nombre> [--frame 128]
+ * Uso: node tools/pack-sheet.mjs <carpeta-frames> <nombre> [--frame 128] [--outline 1.3]
  *   carpeta-frames: salida del render (contiene <accion>_0001.png ... y meta.json)
  *   nombre:         nombre del personaje; escribe client/public/assets/sprites/<nombre>.png y .json
  *   --frame         lado del frame en la hoja (los frames se reducen a este tamaño)
+ *   --outline       añade un contorno oscuro de ese grosor (px) alrededor de cada frame (para renders sin Freestyle)
  *
- * JSON: { frameWidth, frameHeight, ppm, fps, anims: { walk: { start, end, loop } } }
+ * JSON: { frameWidth, frameHeight, ppm, fps, extent, anims: { walk: { start, end, loop } } }
+ *   extent: radio (px) del píxel opaco más lejano del centro en cualquier frame (para encajar vistas previas)
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -17,6 +19,7 @@ import zlib from "node:zlib";
 const [,, srcDir, name, ...rest] = process.argv;
 if (!srcDir || !name) { console.error("uso: node tools/pack-sheet.mjs <carpeta> <nombre> [--frame 128]"); process.exit(1); }
 const frameSize = Number(rest[rest.indexOf("--frame") + 1]) || 128;
+const outlinePx = rest.includes("--outline") ? Number(rest[rest.indexOf("--outline") + 1]) || 0 : 0;
 const OUT = path.resolve("client/public/assets/sprites");
 
 // ---- PNG mínimo (igual que process-art) ----
@@ -74,8 +77,30 @@ function resize(img, nw, nh) {
   return { w: nw, h: nh, px: out };
 }
 
+/** Contorno oscuro: dilata el alfa `r` píxeles y pone ese borde debajo del sprite. */
+function outline(img, r) {
+  const { w, h, px } = img; const R = Math.ceil(r); const out = new Uint8Array(px);
+  const line = [10, 8, 13];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const o = (y * w + x) * 4; if (px[o + 3] === 255) continue;
+    let m = 0;
+    for (let dy = -R; dy <= R && m < 255; dy++) for (let dx = -R; dx <= R; dx++) {
+      if (dx * dx + dy * dy > r * r) continue;
+      const sx = x + dx, sy = y + dy; if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
+      const a = px[(sy * w + sx) * 4 + 3]; if (a > m) m = a;
+    }
+    if (m === 0) continue;
+    // sprite sobre borde (composición normal)
+    const sa = px[o + 3] / 255, ba = (m / 255) * (1 - sa), a = sa + ba;
+    for (let c = 0; c < 3; c++) out[o + c] = Math.round((px[o + c] * sa + line[c] * ba) / a);
+    out[o + 3] = Math.round(a * 255);
+  }
+  return { w, h, px: out };
+}
+
 // ---- empaquetado ----
 /** Empaqueta una carpeta de frames en una hoja; devuelve la info de animaciones. */
+let extent = 0;
 function packFolder(dir, outName) {
   const meta = JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8"));
   const frames = [];
@@ -89,7 +114,11 @@ function packFolder(dir, outName) {
   const rows = Math.ceil(frames.length / cols);
   const sheet = { w: cols * frameSize, h: rows * frameSize, px: new Uint8Array(cols * rows * frameSize * frameSize * 4) };
   frames.forEach((file, i) => {
-    const img = resize(decodePng(fs.readFileSync(file)), frameSize, frameSize);
+    let img = resize(decodePng(fs.readFileSync(file)), frameSize, frameSize);
+    if (outlinePx > 0) img = outline(img, outlinePx);
+    for (let y = 0; y < frameSize; y++) for (let x = 0; x < frameSize; x++) {
+      if (img.px[(y * frameSize + x) * 4 + 3] > 40) extent = Math.max(extent, Math.hypot(x + 0.5 - frameSize / 2, y + 0.5 - frameSize / 2));
+    }
     const ox = (i % cols) * frameSize, oy = Math.floor(i / cols) * frameSize;
     for (let y = 0; y < frameSize; y++) sheet.px.set(img.px.subarray(y * frameSize * 4, (y + 1) * frameSize * 4), ((oy + y) * sheet.w + ox) * 4);
   });
@@ -111,7 +140,7 @@ if (fs.existsSync(layersFile)) {
 }
 fs.writeFileSync(path.join(OUT, `${name}.json`), JSON.stringify({
   frameWidth: frameSize, frameHeight: frameSize, columns: info.cols,
-  ppm: info.meta.ppm * (frameSize / info.meta.size), fps: info.meta.fps, anims: info.anims,
+  ppm: info.meta.ppm * (frameSize / info.meta.size), fps: info.meta.fps, extent: Math.ceil(extent), anims: info.anims,
   layers: layers ?? undefined,
 }, null, 2));
 console.log(`${name}.json listo · anims: ${Object.entries(info.anims).map(([k, v]) => `${k}[${v.start}-${v.end}]`).join(" ")}`);

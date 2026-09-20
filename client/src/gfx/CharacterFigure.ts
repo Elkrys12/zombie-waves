@@ -10,19 +10,33 @@ import type { SheetMeta } from "../scenes/BootScene";
 export class CharacterFigure extends Phaser.GameObjects.Container {
   private layers: { name: string; tintable: boolean; sprite: Phaser.GameObjects.Sprite }[] = [];
   private current = "";
+  private appearance?: Appearance;
+  sheet = "";
 
-  constructor(scene: Phaser.Scene, readonly sheet: string) {
+  constructor(scene: Phaser.Scene, sheet: string) {
     super(scene, 0, 0);
-    const meta = scene.cache.json.get(`${sheet}_meta`) as SheetMeta;
+    this.setSheet(sheet);
+    scene.add.existing(this);
+  }
+
+  /** Cambia el personaje base (otra hoja): recrea las capas y conserva animación y apariencia. */
+  setSheet(sheet: string) {
+    if (this.sheet === sheet) return;
+    this.sheet = sheet;
+    for (const l of this.layers) l.sprite.destroy();
+    this.layers = [];
+    const meta = this.scene.cache.json.get(`${sheet}_meta`) as SheetMeta;
     const layers = meta.layers ?? [{ name: "", tintable: false }];
     for (const l of layers) {
       const key = l.name ? `${sheet}_${l.name}` : sheet;
-      const sprite = scene.add.sprite(0, 0, key, 0).setOrigin(0.5, 0.5);
+      const sprite = this.scene.add.sprite(0, 0, key, 0).setOrigin(0.5, 0.5);
       this.add(sprite);
       this.layers.push({ name: l.name, tintable: l.tintable, sprite });
     }
-    this.play("idle");
-    scene.add.existing(this);
+    const anim = this.current || "idle";
+    this.current = "";
+    this.play(anim);
+    if (this.appearance) this.setAppearance(this.appearance);
   }
 
   /** Reproduce una animación (por nombre de acción) en todas las capas a la vez. */
@@ -38,6 +52,7 @@ export class CharacterFigure extends Phaser.GameObjects.Container {
 
   /** Colores y accesorios del jugador. */
   setAppearance(a: Appearance) {
+    this.appearance = { ...a };
     for (const l of this.layers) {
       const s = l.sprite;
       switch (l.name) {

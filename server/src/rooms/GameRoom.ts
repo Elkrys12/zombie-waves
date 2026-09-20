@@ -1,7 +1,7 @@
 import { Room, matchMaker, type Client } from "colyseus";
 import { GameState, Player, Zombie, Bullet } from "./GameState.js";
 import {
-  MAP_WIDTH, MAP_HEIGHT, TICK_RATE, PLAYER_BASE_SPEED, PLAYER_BASE_HP, PLAYER_RADIUS, GUN_SIDE_OFFSET, GUN_FORWARD_OFFSET,
+  MAP_WIDTH, MAP_HEIGHT, TICK_RATE, PLAYER_BASE_SPEED, PLAYER_BASE_HP, PLAYER_RADIUS, GUN_FORWARD_OFFSET, gunHand,
   WEAPONS, UPGRADES, ZOMBIES, upgradeCost,
   VEST_REDUCTION_PER_LEVEL, SPEED_BONUS_PER_LEVEL, DAMAGE_BONUS_PER_LEVEL,
   FIRE_RATE_BONUS_PER_LEVEL, MAX_HP_BONUS_PER_LEVEL,
@@ -120,6 +120,7 @@ export class GameRoom extends Room<{ state: GameState }> {
   }
 
   private applyAppearance(player: Player, a: Appearance) {
+    player.model = a.model;
     player.skin = a.skin;
     player.shirt = a.shirt;
     player.pants = a.pants;
@@ -351,10 +352,11 @@ export class GameRoom extends Room<{ state: GameState }> {
       const bullet = new Bullet();
       bullet.ownerId = ownerId;
       bullet.angle = angle;
-      // La bala sale de la boca del arma (adelantada y desplazada hacia la mano derecha)
+      // La bala sale de la boca del arma (adelantada y desplazada hacia la mano que la sujeta)
       const side = player.angle + Math.PI / 2;
-      bullet.x = player.x + Math.cos(player.angle) * GUN_FORWARD_OFFSET + Math.cos(side) * GUN_SIDE_OFFSET;
-      bullet.y = player.y + Math.sin(player.angle) * GUN_FORWARD_OFFSET + Math.sin(side) * GUN_SIDE_OFFSET;
+      const handY = gunHand(player.model, player.weapon).y;
+      bullet.x = player.x + Math.cos(player.angle) * GUN_FORWARD_OFFSET + Math.cos(side) * handY;
+      bullet.y = player.y + Math.sin(player.angle) * GUN_FORWARD_OFFSET + Math.sin(side) * handY;
 
       const id = `b${this.nextId++}`;
       this.state.bullets.set(id, bullet);
