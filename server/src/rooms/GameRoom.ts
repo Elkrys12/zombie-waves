@@ -71,6 +71,14 @@ export class GameRoom extends Room<{ state: GameState }> {
       if (player) this.buyUpgrade(player, msg.upgrade);
     });
 
+    // Solo para pruebas locales (ZW_DEBUG=1): dinero gratis para probar la tienda
+    if (process.env.ZW_DEBUG) {
+      this.onMessage("debug_money", (client, amount: number) => {
+        const player = this.state.players.get(client.sessionId);
+        if (player) player.money += Math.max(0, Math.min(10000, Number(amount) || 0));
+      });
+    }
+
     this.onMessage("buy_weapon", (client, msg: BuyWeaponMessage) => {
       const player = this.state.players.get(client.sessionId);
       if (player) this.buyWeapon(player, msg.weapon);

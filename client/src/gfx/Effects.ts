@@ -9,6 +9,7 @@ export class Effects {
   private rain: Phaser.GameObjects.Particles.ParticleEmitter;
   private lightningRect: Phaser.GameObjects.Rectangle;
   private casings: Phaser.GameObjects.Rectangle[] = [];
+  private corpses: Phaser.GameObjects.Image[] = [];
   /** 0 = sin lluvia, 1 = tormenta */
   rainIntensity = 0;
 
@@ -92,20 +93,17 @@ export class Effects {
     this.scene.tweens.add({ targets: t, y: t.y - 34, alpha: 0, duration: 650, ease: "Quad.Out", onComplete: () => t.destroy() });
   }
 
-  /** Copia del sprite que gira, se encoge y se desvanece sobre el charco de sangre. */
-  zombieDeath(sprite: Phaser.GameObjects.Image) {
-    const ghost = this.scene.add.image(sprite.x, sprite.y, sprite.texture.key)
-      .setOrigin(sprite.originX, sprite.originY).setScale(sprite.scaleX, sprite.scaleY).setRotation(sprite.rotation).setDepth(6).setTint(0xbbbbbb);
-    this.scene.tweens.add({
-      targets: ghost,
-      rotation: sprite.rotation + (Math.random() < 0.5 ? 0.9 : -0.9),
-      scaleX: sprite.scaleX * 0.75,
-      scaleY: sprite.scaleY * 0.75,
-      alpha: 0,
-      duration: 520,
-      ease: "Quad.In",
-      onComplete: () => ghost.destroy(),
-    });
+  /** El zombie cae y se queda como cadáver en el suelo (misma orientación y tamaño), y se desvanece pasado un rato. */
+  corpse(sprite: Phaser.GameObjects.Image, key: string) {
+    const live = this.scene.textures.get(sprite.texture.key).getSourceImage() as HTMLImageElement;
+    const dead = this.scene.textures.get(key).getSourceImage() as HTMLImageElement;
+    const k = (live.width * sprite.scaleX) / dead.width; // mismo ancho que el sprite vivo
+    const c = this.scene.add.image(sprite.x, sprite.y, key)
+      .setOrigin(0.5, 0.5).setRotation(sprite.rotation).setScale(k * 1.15).setDepth(3).setAlpha(0.95);
+    this.corpses.push(c);
+    if (this.corpses.length > 40) this.corpses.shift()?.destroy();
+    this.scene.tweens.add({ targets: c, scale: k, duration: 160, ease: "Quad.Out" });
+    this.scene.tweens.add({ targets: c, alpha: 0, delay: 16000, duration: 3000, onComplete: () => c.destroy() });
   }
 
   /** Estirón hacia delante del zombie al atacar. */
@@ -116,11 +114,15 @@ export class Effects {
     });
   }
 
-  /** Retroceso del cuerpo del jugador (dentro de su contenedor, hacia atrás del arma). */
-  recoil(body: Phaser.GameObjects.Image, strength: number) {
-    this.scene.tweens.killTweensOf(body);
-    body.x = -strength;
+  /** Retroceso: el arma se echa atrás con fuerza y el cuerpo la acompaña un poco (posiciones locales del contenedor). */
+  recoil(body: Phaser.GameObjects.Image, gun: Phaser.GameObjects.Image, strength: number) {
+    const gunBase = (gun.getData("baseX") as number | undefined) ?? gun.x;
+    gun.setData("baseX", gunBase);
+    this.scene.tweens.killTweensOf([body, gun]);
+    body.x = -strength * 0.5;
+    gun.x = gunBase - strength;
     this.scene.tweens.add({ targets: body, x: 0, duration: 110, ease: "Quad.Out" });
+    this.scene.tweens.add({ targets: gun, x: gunBase, duration: 130, ease: "Quad.Out" });
   }
 
   /** Relámpago: dos destellos rápidos. Devuelve la duración total (para bajar la oscuridad mientras). */

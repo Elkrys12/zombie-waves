@@ -1,13 +1,25 @@
 import Phaser from "phaser";
 import { generateTextures } from "../gfx/textures";
 
-/** Sprites de personaje por orden de entrada a la sala. */
-export const PLAYER_SPRITES = ["player_1", "player_2", "player_3", "player_4"] as const;
+/** Sprites de personaje (sin arma) por orden de entrada a la sala. */
+export const PLAYER_SPRITES = ["player_1_base", "player_2_base", "player_3_base", "player_4_base"] as const;
+
+/** Cómo se dibuja cada tipo de zombie: dónde está la cabeza (pivote) y su tamaño respecto al radio físico. */
+export const ZOMBIE_SPRITE: Record<string, { originX: number; originY: number; heightK: number }> = {
+  walker: { originX: 0.3, originY: 0.5, heightK: 2.7 },
+  runner: { originX: 0.47, originY: 0.5, heightK: 2.6 },
+  tank: { originX: 0.6, originY: 0.5, heightK: 3.1 },
+};
+
+/** Tamaño en pantalla (alto en px) de cada arma en manos del jugador. */
+export const WEAPON_SIZE: Record<string, number> = { pistol: 16, smg: 20, shotgun: 15, rifle: 22 };
 
 /** Todo el arte propio (generado con IA y procesado con tools/process-art.mjs). */
 const ART = [
-  "player_1", "player_2", "player_3", "player_4",
+  "player_1_base", "player_2_base", "player_3_base", "player_4_base",
+  "weapon_pistol", "weapon_smg", "weapon_shotgun", "weapon_rifle",
   "zombie_walker", "zombie_runner", "zombie_tank",
+  "zombie_walker_dead", "zombie_runner_dead", "zombie_tank_dead",
   "car_red", "car_blue", "car_green", "car_white",
   "tree_big", "tree_small", "bush", "fountain",
   "crate", "barrel", "sandbags", "fence_white", "lamp_post", "mailbox", "hydrant", "cone", "rock", "tires",

@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { NetworkManager } from "../net/NetworkManager";
 import { SoundManager } from "../audio/SoundManager";
-import { PLAYER_SPRITES } from "./BootScene";
+import { PLAYER_SPRITES, ZOMBIE_SPRITE, WEAPON_SIZE } from "./BootScene";
 import { MapRenderer } from "../gfx/MapRenderer";
 import { Lighting, type LightSource } from "../gfx/Lighting";
 import { Effects } from "../gfx/Effects";
@@ -109,9 +109,11 @@ export class GameScene extends Phaser.Scene {
       const body = this.add.image(0, 0, PLAYER_SPRITES[this.colorIndex++ % PLAYER_SPRITES.length]).setOrigin(0.3, 0.5);
       const baseScale = (PLAYER_RADIUS * 3.4) / body.height;
       body.setScale(baseScale).setData("base", baseScale);
-      const gun = body; // el sprite ya incluye el arma
+      // Arma como capa aparte, apoyada en las manos (a la derecha de la cabeza)
+      const gun = this.add.image(body.displayWidth * 0.36, 1, `weapon_${player.weapon}`).setOrigin(0.32, 0.5);
+      gun.setScale(WEAPON_SIZE[player.weapon] / gun.height);
       const shadow = this.add.ellipse(2, 5, PLAYER_RADIUS * 3, PLAYER_RADIUS * 2.6, 0x000000, 0.35);
-      const root = this.add.container(player.x, player.y, [shadow, body]).setDepth(10);
+      const root = this.add.container(player.x, player.y, [shadow, body, gun]).setDepth(10);
       const name = this.add.text(0, 0, player.name, { fontSize: "12px", color: "#fff", fontFamily: "system-ui", stroke: "#000", strokeThickness: 3 })
         .setOrigin(0.5, 1).setDepth(12);
       const hpBg = this.add.rectangle(0, 0, 40, 5, 0x000000, 0.6).setDepth(12);
@@ -146,8 +148,9 @@ export class GameScene extends Phaser.Scene {
 
     $(state).zombies.onAdd((zombie: ZombieState, id: string) => {
       const config = ZOMBIES[zombie.type];
-      const sprite = this.add.image(zombie.x, zombie.y, `zombie_${zombie.type}`).setOrigin(0.3, 0.5).setDepth(8);
-      const zScale = (config.radius * 2.7) / sprite.height; // la cabeza ocupa casi todo el alto del sprite
+      const look = ZOMBIE_SPRITE[zombie.type];
+      const sprite = this.add.image(zombie.x, zombie.y, `zombie_${zombie.type}`).setOrigin(look.originX, look.originY).setDepth(8);
+      const zScale = (config.radius * look.heightK) / sprite.height;
       sprite.setData("scale", zScale);
       const shadow = this.add.ellipse(zombie.x, zombie.y + 3, config.radius * 2.4, config.radius * 2.1, 0x000000, 0.35).setDepth(7);
       const w = config.radius * 2;
@@ -177,7 +180,7 @@ export class GameScene extends Phaser.Scene {
       const view = this.zombies.get(id);
       if (!view) return;
       this.onZombieDeath(view.sprite.x, view.sprite.y);
-      this.fx.zombieDeath(view.sprite);
+      this.fx.corpse(view.sprite, `${view.sprite.texture.key}_dead`);
       [view.sprite, view.shadow, view.hpBg, view.hpBar].forEach((o) => o.destroy());
       this.zombies.delete(id);
     });
@@ -233,7 +236,7 @@ export class GameScene extends Phaser.Scene {
       view.root.setData("lastShot", now);
       const weapon = WEAPONS[owner.weapon as WeaponId];
       const kick = weapon.bulletsPerShot > 1 ? 9 : weapon.damage > 30 ? 7 : 4;
-      this.fx.recoil(view.body, kick);
+      this.fx.recoil(view.body, view.gun, kick);
       this.fx.casing(view.root.x + Math.cos(owner.angle) * 10, view.root.y + Math.sin(owner.angle) * 10, owner.angle);
       if (bullet.ownerId === this.net.sessionId) this.cameras.main.shake(70, kick * 0.0006);
     }
@@ -348,6 +351,14 @@ export class GameScene extends Phaser.Scene {
       const bob = !player.alive ? 1 : view.moving ? 1 + Math.sin(time / 60) * 0.05 : 1 + Math.sin(time / 420) * 0.015;
       const base = view.body.getData("base") as number;
       view.body.setScale(base * bob, base * (2 - bob));
+
+      // Arma equipada (cambia al comprar) y visible solo en vida
+      const gunKey = `weapon_${player.weapon}`;
+      if (view.gun.texture.key !== gunKey) {
+        view.gun.setTexture(gunKey);
+        view.gun.setScale(WEAPON_SIZE[player.weapon] / view.gun.height);
+      }
+      view.gun.setVisible(player.alive);
 
       view.name.setPosition(view.root.x, view.root.y - PLAYER_RADIUS - 12);
       view.hpBg.setPosition(view.root.x, view.root.y - PLAYER_RADIUS - 6);

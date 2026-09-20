@@ -22,11 +22,14 @@ const SPEC = {
   // personajes y zombies: sprites grandes para que se vean nítidos al escalar
   player_1: { max: 256 }, player_2: { max: 256 }, player_3: { max: 256 }, player_4: { max: 256 },
   zombie_walker: { max: 256 }, zombie_runner: { max: 256 }, zombie_tank: { max: 320 },
+  zombie_walker_dead: { max: 256 }, zombie_runner_dead: { max: 256 }, zombie_tank_dead: { max: 320 },
+  player_1_base: { max: 256 }, player_2_base: { max: 256 }, player_3_base: { max: 256 }, player_4_base: { max: 256 },
+  weapon_pistol: { max: 160 }, weapon_smg: { max: 200 }, weapon_shotgun: { max: 220 }, weapon_rifle: { max: 240 },
   car_red: { max: 256 }, car_blue: { max: 256 }, car_green: { max: 256 }, car_white: { max: 256 },
   tree_big: { max: 256 }, tree_small: { max: 200 }, bush: { max: 128 }, fountain: { max: 256 },
   crate: { max: 128 }, barrel: { max: 128 }, sandbags: { max: 256 }, fence_white: { max: 320 },
   lamp_post: { max: 160, loose: true }, mailbox: { max: 128 }, hydrant: { max: 96 }, cone: { max: 96 },
-  rock: { max: 128 }, tires: { max: 128 },
+  rock: { max: 128, keepInner: true }, tires: { max: 128 }, // keepInner: no tocar huecos cerrados (relleno gris legítimo)
   blood_splat: { max: 160 }, muzzle_flash: { max: 128, loose: true }, bullet: { max: 96, loose: true },
   icon_heart: { max: 96 }, icon_money: { max: 96 }, icon_skull: { max: 96 }, icon_pistol: { max: 96 },
   icon_smg: { max: 96 }, icon_shotgun: { max: 96 }, icon_rifle: { max: 96 }, icon_vest: { max: 96 },
@@ -121,10 +124,11 @@ function isBgLike(px, o, loose) {
   const r = px[o], g = px[o + 1], b = px[o + 2];
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   const bright = (r + g + b) / 3;
-  return loose ? bright > 165 && max - min < 95 : bright > 150 && max - min < 34;
+  // Gris neutro de cualquier brillo (los generadores usan tableros claros u oscuros)
+  return loose ? bright > 140 && max - min < 95 : bright > 90 && max - min < 30;
 }
 
-function removeCheckerboard(img, loose) {
+function removeCheckerboard(img, loose, keepInner = false) {
   const { w, h, px } = img;
   const label = new Int32Array(w * h).fill(-1);
   const bg = new Uint8Array(w * h);
@@ -136,7 +140,7 @@ function removeCheckerboard(img, loose) {
   for (let start = 0; start < w * h; start++) {
     if (!bg[start] || label[start] !== -1) continue;
     const id = comps.length;
-    const comp = { size: 0, border: false, bright: 0, dark: 0 };
+    const comp = { size: 0, border: false, lums: [] };
     comps.push(comp);
     let sp = 0; stack[sp++] = start; label[start] = id;
     while (sp > 0) {
@@ -144,16 +148,22 @@ function removeCheckerboard(img, loose) {
       const x = i % w, y = (i - x) / w;
       comp.size++;
       if (x === 0 || y === 0 || x === w - 1 || y === h - 1) comp.border = true;
-      const lum = (px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2]) / 3;
-      if (lum > 236) comp.bright++; else if (lum < 218) comp.dark++;
+      comp.lums.push((px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2]) / 3);
       const nb = [i - 1, i + 1, i - w, i + w];
       if (x === 0) nb[0] = -1; if (x === w - 1) nb[1] = -1;
       for (const n of nb) if (n >= 0 && n < w * h && bg[n] && label[n] === -1) { label[n] = id; stack[sp++] = n; }
     }
   }
 
-  // Se elimina lo que toca el borde y los huecos cerrados que muestran el patrón (claro + gris)
-  const remove = comps.map((c) => c.border || (c.size > 300 && c.bright > c.size * 0.12 && c.dark > c.size * 0.12));
+  // Se elimina lo que toca el borde y los huecos cerrados que muestran el patrón de dos tonos
+  const isChecker = (c) => {
+    if (c.size < 300) return false;
+    const mean = c.lums.reduce((a, b) => a + b, 0) / c.size;
+    let hi = 0, lo = 0;
+    for (const l of c.lums) { if (l > mean + 12) hi++; else if (l < mean - 12) lo++; }
+    return hi > c.size * 0.15 && lo > c.size * 0.15;
+  };
+  const remove = comps.map((c) => c.border || (!keepInner && isChecker(c)));
   for (let i = 0; i < w * h; i++) if (label[i] !== -1 && remove[label[i]]) px[i * 4 + 3] = 0;
 
   // Borde suave: los píxeles claros pegados a zona eliminada se atenúan según su luminosidad
@@ -223,7 +233,7 @@ for (const name of names) {
   const spec = SPEC[name];
   let img = decodePng(fs.readFileSync(file));
   if (!spec.texture) {
-    removeCheckerboard(img, !!spec.loose);
+    removeCheckerboard(img, !!spec.loose, !!spec.keepInner);
     img = crop(img);
   }
   img = resize(img, spec.max);

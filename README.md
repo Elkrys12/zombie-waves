@@ -90,6 +90,7 @@ Scripts útiles:
 | `npm run dev:client` | Solo el cliente |
 | `npm run build` | Compila todo para producción |
 | `npm run typecheck` | Comprueba tipos en todos los workspaces |
+| `ZW_DEBUG=1 npm run dev:server` | Servidor con el mensaje `debug_money` (dinero gratis) para probar la tienda en local |
 
 ## Despliegue online
 
